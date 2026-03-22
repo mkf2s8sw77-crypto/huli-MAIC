@@ -28,6 +28,7 @@ import { AgentRevealModal } from '@/components/agent/agent-reveal-modal';
 import { createLogger } from '@/lib/logger';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
+import { withBasePath } from '@/lib/utils/base-path';
 
 const log = createLogger('GenerationPreview');
 
@@ -379,18 +380,18 @@ function GenerationPreviewContent() {
 
         try {
           const allAvatars = [
-            '/avatars/assist.png',
-            '/avatars/assist-2.png',
-            '/avatars/clown.png',
-            '/avatars/clown-2.png',
-            '/avatars/curious.png',
-            '/avatars/curious-2.png',
-            '/avatars/note-taker.png',
-            '/avatars/note-taker-2.png',
-            '/avatars/teacher.png',
-            '/avatars/teacher-2.png',
-            '/avatars/thinker.png',
-            '/avatars/thinker-2.png',
+            withBasePath('/avatars/assist.png'),
+            withBasePath('/avatars/assist-2.png'),
+            withBasePath('/avatars/clown.png'),
+            withBasePath('/avatars/clown-2.png'),
+            withBasePath('/avatars/curious.png'),
+            withBasePath('/avatars/curious-2.png'),
+            withBasePath('/avatars/note-taker.png'),
+            withBasePath('/avatars/note-taker-2.png'),
+            withBasePath('/avatars/teacher.png'),
+            withBasePath('/avatars/teacher-2.png'),
+            withBasePath('/avatars/thinker.png'),
+            withBasePath('/avatars/thinker-2.png'),
           ];
 
           // No outlines yet — agent generation uses only stage name + description

@@ -31,6 +31,7 @@ import {
   isBrowserTTSAbortError,
   playBrowserTTSPreview,
 } from '@/lib/audio/browser-tts-preview';
+import { withBasePath } from '@/lib/utils/base-path';
 
 const log = createLogger('AudioSettings');
 
@@ -584,7 +585,11 @@ export function AudioSettings({ onSave }: AudioSettingsProps = {}) {
                   <SelectItem key={provider.id} value={provider.id}>
                     <div className="flex items-center gap-2">
                       {provider.icon && (
-                        <img src={provider.icon} alt={provider.name} className="w-4 h-4" />
+                        <img
+                          src={withBasePath(provider.icon)}
+                          alt={provider.name}
+                          className="w-4 h-4"
+                        />
                       )}
                       {getTTSProviderName(provider.id, t)}
                       {ttsProvidersConfig[provider.id]?.isServerConfigured && (
@@ -956,7 +961,11 @@ export function AudioSettings({ onSave }: AudioSettingsProps = {}) {
                   <SelectItem key={provider.id} value={provider.id}>
                     <div className="flex items-center gap-2">
                       {provider.icon && (
-                        <img src={provider.icon} alt={provider.name} className="w-4 h-4" />
+                        <img
+                          src={withBasePath(provider.icon)}
+                          alt={provider.name}
+                          className="w-4 h-4"
+                        />
                       )}
                       {getASRProviderName(provider.id, t)}
                       {asrProvidersConfig[provider.id]?.isServerConfigured && (

@@ -4,6 +4,7 @@
  */
 
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { withBasePath } from '@/lib/utils/base-path';
 
 interface AgentAvatarProps {
   avatar: string; // Image URL or emoji
@@ -29,7 +30,7 @@ export default function AgentAvatar({ avatar, color, name, size = 'md' }: AgentA
       <Avatar className={sizeClasses[size]} style={{ borderColor: color, borderWidth: 2 }}>
         {isUrl(avatar) ? (
           <>
-            <AvatarImage src={avatar} alt={name} />
+            <AvatarImage src={withBasePath(avatar)} alt={name} />
             <AvatarFallback style={{ backgroundColor: `${color}20`, color }}>
               {name.charAt(0)}
             </AvatarFallback>

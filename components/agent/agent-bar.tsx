@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/lib/store/settings';
 import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import { Sparkles, ChevronDown, ChevronUp, Shuffle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { withBasePath } from '@/lib/utils/base-path';
 
 export function AgentBar() {
   const { t } = useI18n();
@@ -86,7 +87,7 @@ export function AgentBar() {
       {teacherAgent && (
         <div className="size-8 rounded-full overflow-hidden ring-2 ring-blue-400/40 dark:ring-blue-500/30 shrink-0">
           <img
-            src={teacherAgent.avatar}
+            src={withBasePath(teacherAgent.avatar)}
             alt={getAgentName(teacherAgent)}
             className="size-full object-cover"
           />
@@ -100,7 +101,7 @@ export function AgentBar() {
             {agents.find((a) => a.role === 'assistant') && (
               <div className="size-6 rounded-full overflow-hidden ring-[1.5px] ring-background">
                 <img
-                  src={agents.find((a) => a.role === 'assistant')!.avatar}
+                  src={withBasePath(agents.find((a) => a.role === 'assistant')!.avatar)}
                   alt=""
                   className="size-full object-cover"
                 />
@@ -120,7 +121,7 @@ export function AgentBar() {
                   className="size-6 rounded-full overflow-hidden ring-[1.5px] ring-background"
                 >
                   <img
-                    src={agent.avatar}
+                    src={withBasePath(agent.avatar)}
                     alt={getAgentName(agent)}
                     className="size-full object-cover"
                   />
@@ -237,7 +238,7 @@ export function AgentBar() {
                             }}
                           >
                             <img
-                              src={agent.avatar}
+                              src={withBasePath(agent.avatar)}
                               alt={getAgentName(agent)}
                               className="size-full object-cover"
                             />

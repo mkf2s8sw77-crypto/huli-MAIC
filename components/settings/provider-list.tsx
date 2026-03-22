@@ -5,6 +5,7 @@ import { Box, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import type { ProviderId, ProviderConfig } from '@/lib/ai/providers';
+import { withBasePath } from '@/lib/utils/base-path';
 
 interface ProviderWithServerInfo extends ProviderConfig {
   isServerConfigured?: boolean;
@@ -51,7 +52,7 @@ export function ProviderList({
           >
             {provider.icon ? (
               <img
-                src={provider.icon}
+                src={withBasePath(provider.icon)}
                 alt={getProviderDisplayName(provider)}
                 className="w-5 h-5 rounded"
                 onError={(e) => {

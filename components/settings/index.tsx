@@ -58,6 +58,7 @@ import { GeneralSettings } from './general-settings';
 import { ModelEditDialog } from './model-edit-dialog';
 import { AddProviderDialog, type NewProviderData } from './add-provider-dialog';
 import type { SettingsSection, EditingModel } from '@/lib/types/settings';
+import { withBasePath } from '@/lib/utils/base-path';
 
 // ─── Provider List Column (reusable) ───
 function ProviderListColumn<T extends string>({
@@ -91,7 +92,7 @@ function ProviderListColumn<T extends string>({
           >
             {provider.icon ? (
               <img
-                src={provider.icon}
+                src={withBasePath(provider.icon)}
                 alt={provider.name}
                 className="w-5 h-5 rounded"
                 onError={(e) => {
@@ -520,7 +521,6 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         return null;
       case 'pdf': {
         const pdfProvider = PDF_PROVIDERS[selectedPdfProviderId];
-        if (!pdfProvider) return null;
         return (
           <>
             {pdfProvider.icon ? (
@@ -541,7 +541,6 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
       }
       case 'web-search': {
         const wsProvider = WEB_SEARCH_PROVIDERS[selectedWebSearchProviderId];
-        if (!wsProvider) return null;
         return (
           <>
             {wsProvider.icon ? (

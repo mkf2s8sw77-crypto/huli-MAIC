@@ -7,6 +7,7 @@ import { AlertCircle, User, Users, Sparkles, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { withBasePath } from '@/lib/utils/base-path';
 
 interface Agent {
   id: string;
@@ -110,7 +111,7 @@ export function AgentSettings({
                     disabled={agent.role === 'teacher'}
                   />
                   <Avatar className="size-10">
-                    <AvatarImage src={agent.avatar} alt={getAgentName(agent)} />
+                    <AvatarImage src={withBasePath(agent.avatar)} alt={getAgentName(agent)} />
                     <AvatarFallback>{getAgentName(agent).charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1">

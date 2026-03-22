@@ -27,6 +27,7 @@ import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import type { DiscussionAction } from '@/lib/types/action';
 import type { EngineMode, PlaybackView } from '@/lib/playback';
 import type { Participant } from '@/lib/types/roundtable';
+import { withBasePath } from '@/lib/utils/base-path';
 
 export interface DiscussionRequest {
   topic: string;
@@ -84,7 +85,11 @@ function AvatarDisplay({ src, alt, className }: { src: string; alt?: string; cla
   const isUrl = src.startsWith('http') || src.startsWith('data:') || src.startsWith('/');
   if (isUrl) {
     return (
-      <img src={src} alt={alt || ''} className={cn('w-full h-full object-cover', className)} />
+      <img
+        src={withBasePath(src)}
+        alt={alt || ''}
+        className={cn('w-full h-full object-cover', className)}
+      />
     );
   }
   return (

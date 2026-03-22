@@ -46,6 +46,8 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
+import { withBasePath } from '@/lib/utils/base-path';
+import { LICENSE_URL, SOURCE_CODE_URL } from '@/lib/constants/open-source';
 
 const log = createLogger('Home');
 
@@ -323,7 +325,7 @@ function HomePage() {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center p-4 pt-16 md:p-8 md:pt-16 overflow-x-hidden">
+    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center px-4 pt-16 pb-4 md:px-8 md:pt-16 md:pb-6 overflow-x-hidden">
       {/* ═══ Top-right pill (unchanged) ═══ */}
       <div
         ref={toolbarRef}
@@ -489,13 +491,13 @@ function HomePage() {
         transition={{ duration: 0.6, ease: 'easeOut' }}
         className={cn(
           'relative z-20 w-full max-w-[800px] flex flex-col items-center',
-          classrooms.length === 0 ? 'justify-center min-h-[calc(100dvh-8rem)]' : 'mt-[10vh]',
+          classrooms.length === 0 ? 'flex-1 justify-center min-h-0' : 'mt-[10vh]',
         )}
       >
         {/* ── Logo ── */}
         <motion.img
-          src="/logo-horizontal.png"
-          alt="OpenMAIC"
+          src={withBasePath('/huli-tech-logo.png')}
+          alt="Huli Tech"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{
@@ -504,7 +506,7 @@ function HomePage() {
             stiffness: 200,
             damping: 20,
           }}
-          className="h-12 md:h-16 mb-2 -ml-2 md:-ml-3"
+          className="h-14 md:h-20 w-auto object-contain rounded-2xl shadow-sm ring-1 ring-black/5 dark:ring-white/10 mb-3"
         />
 
         {/* ── Slogan ── */}
@@ -512,9 +514,9 @@ function HomePage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.25 }}
-          className="text-sm text-muted-foreground/60 mb-8"
+          className="text-sm md:text-base text-muted-foreground/75 mb-8 tracking-[0.08em]"
         >
-          {t('home.slogan')}
+          上海沪里数字科技有限公司
         </motion.p>
 
         {/* ── Unified input area ── */}
@@ -605,6 +607,7 @@ function HomePage() {
             </motion.div>
           )}
         </AnimatePresence>
+
       </motion.div>
 
       {/* ═══ Recent classrooms — collapsible ═══ */}
@@ -684,9 +687,34 @@ function HomePage() {
         </motion.div>
       )}
 
-      {/* Footer — flows with content, at the very end */}
-      <div className="mt-auto pt-12 pb-4 text-center text-xs text-muted-foreground/40">
-        OpenMAIC Open Source Project
+      <div className="w-full max-w-4xl pt-5 md:pt-6 text-center text-[10px] md:text-xs text-muted-foreground/50">
+        <div>本服务基于 OpenMAIC 二次开发</div>
+        <div className="mt-1 flex items-center justify-center gap-2 flex-wrap">
+          <a
+            href={SOURCE_CODE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-foreground transition-colors"
+          >
+            源码仓库
+          </a>
+          <span className="opacity-35">·</span>
+          <a
+            href={LICENSE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-foreground transition-colors"
+          >
+            许可证
+          </a>
+          <span className="opacity-35">·</span>
+          <a
+            href={withBasePath('/open-source/')}
+            className="hover:text-foreground transition-colors"
+          >
+            开源说明
+          </a>
+        </div>
       </div>
     </div>
   );
@@ -792,7 +820,7 @@ function GreetingBar() {
         >
           <div className="shrink-0 relative">
             <div className="size-8 rounded-full overflow-hidden ring-[1.5px] ring-border/30 group-hover:ring-violet-400/60 dark:group-hover:ring-violet-400/40 transition-all duration-300">
-              <img src={avatar} alt="" className="size-full object-cover" />
+              <img src={withBasePath(avatar)} alt="" className="size-full object-cover" />
             </div>
             <div className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-white dark:bg-slate-800 border border-border/40 flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity">
               <Pencil className="size-[7px] text-muted-foreground/70" />
@@ -850,7 +878,7 @@ function GreetingBar() {
                   }}
                 >
                   <div className="size-8 rounded-full overflow-hidden ring-[1.5px] ring-violet-300/70 dark:ring-violet-500/40 transition-all duration-300">
-                    <img src={avatar} alt="" className="size-full object-cover" />
+                    <img src={withBasePath(avatar)} alt="" className="size-full object-cover" />
                   </div>
                   <motion.div
                     initial={{ scale: 0 }}
@@ -943,7 +971,7 @@ function GreetingBar() {
                                 : 'hover:ring-1 hover:ring-muted-foreground/30',
                             )}
                           >
-                            <img src={url} alt="" className="size-full" />
+                            <img src={withBasePath(url)} alt="" className="size-full" />
                           </button>
                         ))}
                         <label

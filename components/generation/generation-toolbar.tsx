@@ -21,6 +21,7 @@ import type { WebSearchProviderId } from '@/lib/web-search/types';
 import type { ProviderId } from '@/lib/ai/providers';
 import type { SettingsSection } from '@/lib/types/settings';
 import { MediaPopover } from '@/components/generation/media-popover';
+import { withBasePath } from '@/lib/utils/base-path';
 
 // ─── Constants ───────────────────────────────────────────────
 const MAX_PDF_SIZE_MB = 50;
@@ -190,7 +191,11 @@ export function GenerationToolbar({
                     <SelectItem key={provider.id} value={provider.id} disabled={!available}>
                       <div className={cn('flex items-center gap-1.5', !available && 'opacity-50')}>
                         {provider.icon && (
-                          <img src={provider.icon} alt={provider.name} className="w-3.5 h-3.5" />
+                          <img
+                            src={withBasePath(provider.icon)}
+                            alt={provider.name}
+                            className="w-3.5 h-3.5"
+                          />
                         )}
                         {provider.name}
                         {cfg?.isServerConfigured && (
@@ -473,7 +478,7 @@ function ModelSelectorPopover({
                 >
                   {provider.icon ? (
                     <img
-                      src={provider.icon}
+                      src={withBasePath(provider.icon)}
                       alt={provider.name}
                       className="size-5 rounded-sm shrink-0"
                     />

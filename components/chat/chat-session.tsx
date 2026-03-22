@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/hooks/use-i18n';
 import { CircleStop } from 'lucide-react';
 import { InlineActionTag } from './inline-action-tag';
 import { useUserProfileStore } from '@/lib/store/user-profile';
+import { withBasePath } from '@/lib/utils/base-path';
 
 /** Extended message part type covering standard + custom action parts */
 interface MessagePart {
@@ -37,7 +38,11 @@ function AvatarDisplay({ src, alt, className }: { src: string; alt?: string; cla
   const isUrl = src.startsWith('http') || src.startsWith('data:') || src.startsWith('/');
   if (isUrl) {
     return (
-      <img src={src} alt={alt || ''} className={cn('w-full h-full object-cover', className)} />
+      <img
+        src={withBasePath(src)}
+        alt={alt || ''}
+        className={cn('w-full h-full object-cover', className)}
+      />
     );
   }
   return (

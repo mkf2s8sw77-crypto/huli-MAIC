@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
+import { withBasePath } from '@/lib/utils/base-path';
 
 interface AgentRevealModalProps {
   agents: Array<{
@@ -232,7 +233,7 @@ export function AgentRevealModal({ agents, open, onClose, onAllRevealed }: Agent
                             >
                               {isUrl(agent.avatar) ? (
                                 <img
-                                  src={agent.avatar}
+                                  src={withBasePath(agent.avatar)}
                                   alt={agent.name}
                                   className="size-full rounded-full object-cover"
                                 />

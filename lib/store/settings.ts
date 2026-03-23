@@ -11,10 +11,12 @@ import { PROVIDERS } from '@/lib/ai/providers';
 import type { TTSProviderId, ASRProviderId } from '@/lib/audio/types';
 import { ASR_PROVIDERS, DEFAULT_TTS_VOICES, TTS_PROVIDERS } from '@/lib/audio/constants';
 import type { PDFProviderId } from '@/lib/pdf/types';
+import { PDF_PROVIDERS } from '@/lib/pdf/constants';
 import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
 import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
 import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
+import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('Settings');
@@ -265,6 +267,7 @@ const getDefaultAudioConfig = () => ({
     'glm-tts': { apiKey: '', baseUrl: '', enabled: false },
     'qwen-tts': { apiKey: '', baseUrl: '', enabled: false },
     'minimax-tts': { apiKey: '', baseUrl: '', enabled: false },
+    'elevenlabs-tts': { apiKey: '', baseUrl: '', enabled: false },
     'browser-native-tts': { apiKey: '', baseUrl: '', enabled: true },
   } as Record<TTSProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
   asrProvidersConfig: {
@@ -292,6 +295,7 @@ const getDefaultImageConfig = () => ({
     'qwen-image': { apiKey: '', baseUrl: '', enabled: false },
     'nano-banana': { apiKey: '', baseUrl: '', enabled: false },
     'minimax-image': { apiKey: '', baseUrl: '', enabled: false },
+    'grok-image': { apiKey: '', baseUrl: '', enabled: false },
   } as Record<ImageProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
@@ -304,6 +308,7 @@ const getDefaultVideoConfig = () => ({
     kling: { apiKey: '', baseUrl: '', enabled: false },
     veo: { apiKey: '', baseUrl: '', enabled: false },
     sora: { apiKey: '', baseUrl: '', enabled: false },
+    'grok-video': { apiKey: '', baseUrl: '', enabled: false },
   } as Record<VideoProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
@@ -352,15 +357,56 @@ function ensureBuiltInProviders(state: Partial<SettingsState>): void {
   });
 }
 
+/**
+ * Check whether a provider ID exists in the given provider registry.
+ */
+function hasProviderId(providerMap: Record<string, unknown>, providerId?: string): boolean {
+  return typeof providerId === 'string' && providerId in providerMap;
+}
+
+/**
+ * Validate all persisted provider IDs against their registries.
+ * Reset any stale / removed ID back to its default value.
+ * Called during both migrate and merge to cover all rehydration paths.
+ */
+function ensureValidProviderSelections(state: Partial<SettingsState>): void {
+  const defaultAudioConfig = getDefaultAudioConfig();
+  const defaultPdfConfig = getDefaultPDFConfig();
+  const defaultImageConfig = getDefaultImageConfig();
+  const defaultVideoConfig = getDefaultVideoConfig();
+  const defaultWebSearchConfig = getDefaultWebSearchConfig();
+
+  if (!hasProviderId(PDF_PROVIDERS, state.pdfProviderId)) {
+    state.pdfProviderId = defaultPdfConfig.pdfProviderId;
+  }
+
+  if (!hasProviderId(WEB_SEARCH_PROVIDERS, state.webSearchProviderId)) {
+    state.webSearchProviderId = defaultWebSearchConfig.webSearchProviderId;
+  }
+
+  if (!hasProviderId(IMAGE_PROVIDERS, state.imageProviderId)) {
+    state.imageProviderId = defaultImageConfig.imageProviderId;
+  }
+
+  if (!hasProviderId(VIDEO_PROVIDERS, state.videoProviderId)) {
+    state.videoProviderId = defaultVideoConfig.videoProviderId;
+  }
+
+  if (!hasProviderId(TTS_PROVIDERS, state.ttsProviderId)) {
+    state.ttsProviderId = defaultAudioConfig.ttsProviderId;
+  }
+
+  if (!hasProviderId(ASR_PROVIDERS, state.asrProviderId)) {
+    state.asrProviderId = defaultAudioConfig.asrProviderId;
+  }
+}
+
 function ensureBuiltInMediaProviders(state: Partial<SettingsState>): void {
+  const defaultAudioConfig = getDefaultAudioConfig();
   if (state.ttsProvidersConfig) {
     for (const providerId of Object.keys(TTS_PROVIDERS) as TTSProviderId[]) {
       if (!state.ttsProvidersConfig[providerId]) {
-        state.ttsProvidersConfig[providerId] = {
-          apiKey: '',
-          baseUrl: '',
-          enabled: providerId === 'openai-tts' || providerId === 'browser-native-tts',
-        };
+        state.ttsProvidersConfig[providerId] = defaultAudioConfig.ttsProvidersConfig[providerId];
       }
     }
   }
@@ -368,38 +414,39 @@ function ensureBuiltInMediaProviders(state: Partial<SettingsState>): void {
   if (state.asrProvidersConfig) {
     for (const providerId of Object.keys(ASR_PROVIDERS) as ASRProviderId[]) {
       if (!state.asrProvidersConfig[providerId]) {
-        state.asrProvidersConfig[providerId] = {
-          apiKey: '',
-          baseUrl: '',
-          enabled: providerId === 'openai-whisper' || providerId === 'browser-native',
-        };
+        state.asrProvidersConfig[providerId] = defaultAudioConfig.asrProvidersConfig[providerId];
       }
     }
   }
 
-  if (state.imageProvidersConfig) {
-    for (const providerId of Object.keys(IMAGE_PROVIDERS) as ImageProviderId[]) {
-      if (!state.imageProvidersConfig[providerId]) {
-        state.imageProvidersConfig[providerId] = {
-          apiKey: '',
-          baseUrl: '',
-          enabled: false,
-        };
-      }
-    }
-  }
+  ensureBuiltInImageProviders(state);
+  ensureBuiltInVideoProviders(state);
+}
 
-  if (state.videoProvidersConfig) {
-    for (const providerId of Object.keys(VIDEO_PROVIDERS) as VideoProviderId[]) {
-      if (!state.videoProvidersConfig[providerId]) {
-        state.videoProvidersConfig[providerId] = {
-          apiKey: '',
-          baseUrl: '',
-          enabled: false,
-        };
-      }
+function ensureBuiltInImageProviders(state: Partial<SettingsState>): void {
+  if (!state.imageProvidersConfig) return;
+  const defaultConfig = getDefaultImageConfig().imageProvidersConfig;
+  Object.keys(IMAGE_PROVIDERS).forEach((pid) => {
+    const providerId = pid as ImageProviderId;
+    if (!state.imageProvidersConfig![providerId]) {
+      state.imageProvidersConfig![providerId] = defaultConfig[providerId];
     }
-  }
+  });
+}
+
+/**
+ * Ensure videoProvidersConfig includes all built-in video providers.
+ * Called on every rehydrate so newly added video providers appear automatically.
+ */
+function ensureBuiltInVideoProviders(state: Partial<SettingsState>): void {
+  if (!state.videoProvidersConfig) return;
+  const defaultConfig = getDefaultVideoConfig().videoProvidersConfig;
+  Object.keys(VIDEO_PROVIDERS).forEach((pid) => {
+    const providerId = pid as VideoProviderId;
+    if (!state.videoProvidersConfig![providerId]) {
+      state.videoProvidersConfig![providerId] = defaultConfig[providerId];
+    }
+  });
 }
 
 // Migrate from old localStorage format
@@ -1044,6 +1091,10 @@ export const useSettingsStore = create<SettingsState>()(
         // Ensure providersConfig has all built-in providers (also in merge below)
         ensureBuiltInProviders(state);
 
+        // Ensure image/video configs have all built-in providers
+        ensureBuiltInImageProviders(state);
+        ensureBuiltInVideoProviders(state);
+
         // Migrate from old ttsModel to new ttsProviderId
         if (state.ttsModel && !state.ttsProviderId) {
           // Map old ttsModel values to new ttsProviderId
@@ -1144,6 +1195,7 @@ export const useSettingsStore = create<SettingsState>()(
         const merged = { ...currentState, ...(persistedState as object) };
         ensureBuiltInProviders(merged as Partial<SettingsState>);
         ensureBuiltInMediaProviders(merged as Partial<SettingsState>);
+        ensureValidProviderSelections(merged as Partial<SettingsState>);
         return merged as SettingsState;
       },
     },

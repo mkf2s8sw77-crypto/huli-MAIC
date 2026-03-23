@@ -16,6 +16,7 @@ import {
   generateWithMiniMaxImage,
   testMiniMaxImageConnectivity,
 } from './adapters/minimax-image-adapter';
+import { generateWithGrokImage, testGrokImageConnectivity } from './adapters/grok-image-adapter';
 
 export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
   seedream: {
@@ -78,6 +79,17 @@ export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
     models: [{ id: 'image-01', name: 'MiniMax Image 01' }],
     supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
   },
+  'grok-image': {
+    id: 'grok-image',
+    name: 'Grok Image (xAI)',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://api.x.ai/v1',
+    models: [
+      { id: 'grok-imagine-image', name: 'Grok Imagine Image' },
+      { id: 'grok-imagine-image-pro', name: 'Grok Imagine Image Pro' },
+    ],
+    supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
+  },
 };
 
 export async function testImageConnectivity(
@@ -92,6 +104,8 @@ export async function testImageConnectivity(
       return testNanoBananaConnectivity(config);
     case 'minimax-image':
       return testMiniMaxImageConnectivity(config);
+    case 'grok-image':
+      return testGrokImageConnectivity(config);
     default:
       return {
         success: false,
@@ -113,6 +127,8 @@ export async function generateImage(
       return generateWithNanoBanana(config, options);
     case 'minimax-image':
       return generateWithMiniMaxImage(config, options);
+    case 'grok-image':
+      return generateWithGrokImage(config, options);
     default:
       throw new Error(`Unsupported image provider: ${config.providerId}`);
   }

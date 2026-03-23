@@ -59,6 +59,7 @@ import { ModelEditDialog } from './model-edit-dialog';
 import { AddProviderDialog, type NewProviderData } from './add-provider-dialog';
 import type { SettingsSection, EditingModel } from '@/lib/types/settings';
 import { withBasePath } from '@/lib/utils/base-path';
+import { MEDIA_SETTINGS_LOCKED, VIDEO_SETTINGS_HIDDEN } from '@/lib/config/media-settings';
 
 // ─── Provider List Column (reusable) ───
 function ProviderListColumn<T extends string>({
@@ -68,6 +69,7 @@ function ProviderListColumn<T extends string>({
   onSelect,
   width,
   t,
+  disabled = false,
 }: {
   providers: Array<{ id: T; name: string; icon?: string }>;
   configs: Record<string, { isServerConfigured?: boolean }>;
@@ -75,6 +77,7 @@ function ProviderListColumn<T extends string>({
   onSelect: (id: T) => void;
   width: number;
   t: (key: string) => string;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex-shrink-0 bg-background flex flex-col" style={{ width }}>
@@ -82,9 +85,11 @@ function ProviderListColumn<T extends string>({
         {providers.map((provider) => (
           <button
             key={provider.id}
+            disabled={disabled}
             onClick={() => onSelect(provider.id)}
             className={cn(
               'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all border text-left',
+              disabled && 'cursor-not-allowed opacity-60',
               selectedId === provider.id
                 ? 'bg-primary/5 border-primary/50 shadow-sm'
                 : 'border-transparent hover:bg-muted/50',
@@ -122,6 +127,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'azure-tts': t('settings.providerAzureTTS'),
     'glm-tts': t('settings.providerGLMTTS'),
     'qwen-tts': t('settings.providerQwenTTS'),
+    'minimax-tts': t('settings.providerMiniMaxTTS'),
     'browser-native-tts': t('settings.providerBrowserNativeTTS'),
   };
   return names[providerId];
@@ -141,12 +147,14 @@ const IMAGE_PROVIDER_NAMES: Record<ImageProviderId, string> = {
   seedream: 'providerSeedream',
   'qwen-image': 'providerQwenImage',
   'nano-banana': 'providerNanoBanana',
+  'minimax-image': 'providerMiniMaxImage',
 };
 
 const IMAGE_PROVIDER_ICONS: Record<ImageProviderId, string> = {
   seedream: '/logos/doubao.svg',
   'qwen-image': '/logos/bailian.svg',
   'nano-banana': '/logos/gemini.svg',
+  'minimax-image': '/logos/minimax.svg',
 };
 
 const VIDEO_PROVIDER_NAMES: Record<VideoProviderId, string> = {
@@ -171,6 +179,8 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsDialogProps) {
   const { t } = useI18n();
+  const mediaSettingsLocked = MEDIA_SETTINGS_LOCKED;
+  const videoSettingsHidden = VIDEO_SETTINGS_HIDDEN;
 
   // Get settings from store
   const providerId = useSettingsStore((state) => state.providerId);
@@ -210,9 +220,9 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
   useEffect(() => {
     if (open && initialSection) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync section from prop when dialog opens
-      setActiveSection(initialSection);
+      setActiveSection(videoSettingsHidden && initialSection === 'video' ? 'tts' : initialSection);
     }
-  }, [open, initialSection]);
+  }, [open, initialSection, videoSettingsHidden]);
 
   // Model editing state
   const [editingModel, setEditingModel] = useState<EditingModel | null>(null);
@@ -499,7 +509,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
             <>
               {selectedProvider.icon ? (
                 <img
-                  src={selectedProvider.icon}
+                  src={withBasePath(selectedProvider.icon)}
                   alt={selectedProvider.name}
                   className="w-8 h-8 rounded"
                   onError={(e) => {
@@ -525,7 +535,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {pdfProvider.icon ? (
               <img
-                src={pdfProvider.icon}
+                src={withBasePath(pdfProvider.icon)}
                 alt={pdfProvider.name}
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -545,7 +555,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {wsProvider.icon ? (
               <img
-                src={wsProvider.icon}
+                src={withBasePath(wsProvider.icon)}
                 alt={wsProvider.name}
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -566,7 +576,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {imgIcon ? (
               <img
-                src={imgIcon}
+                src={withBasePath(imgIcon)}
                 alt={imgProvider?.name}
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -589,7 +599,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {vidIcon ? (
               <img
-                src={vidIcon}
+                src={withBasePath(vidIcon)}
                 alt={vidProvider?.name}
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -611,7 +621,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {ttsIcon ? (
               <img
-                src={ttsIcon}
+                src={withBasePath(ttsIcon)}
                 alt=""
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -631,7 +641,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {asrIcon ? (
               <img
-                src={asrIcon}
+                src={withBasePath(asrIcon)}
                 alt=""
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -684,18 +694,20 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
               <span className="truncate">{t('settings.imageSettings')}</span>
             </button>
 
-            <button
-              onClick={() => setActiveSection('video')}
-              className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors text-left min-w-0',
-                activeSection === 'video'
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'hover:bg-muted',
-              )}
-            >
-              <Film className="h-4 w-4 shrink-0" />
-              <span className="truncate">{t('settings.videoSettings')}</span>
-            </button>
+            {!videoSettingsHidden && (
+              <button
+                onClick={() => setActiveSection('video')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors text-left min-w-0',
+                  activeSection === 'video'
+                    ? 'bg-primary/10 text-primary font-medium'
+                    : 'hover:bg-muted',
+                )}
+              >
+                <Film className="h-4 w-4 shrink-0" />
+                <span className="truncate">{t('settings.videoSettings')}</span>
+              </button>
+            )}
 
             <button
               onClick={() => setActiveSection('tts')}
@@ -841,6 +853,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                 onSelect={setSelectedImageProviderId}
                 width={providerListWidth}
                 t={t}
+                disabled={mediaSettingsLocked}
               />
               <div
                 onMouseDown={(e) => handleResizeStart(e, 'providerList')}
@@ -851,7 +864,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
             </>
           )}
 
-          {activeSection === 'video' && (
+          {!videoSettingsHidden && activeSection === 'video' && (
             <>
               <ProviderListColumn
                 providers={Object.values(VIDEO_PROVIDERS).map((p) => ({
@@ -864,6 +877,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                 onSelect={setSelectedVideoProviderId}
                 width={providerListWidth}
                 t={t}
+                disabled={mediaSettingsLocked}
               />
               <div
                 onMouseDown={(e) => handleResizeStart(e, 'providerList')}
@@ -887,6 +901,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                 onSelect={setTTSProvider}
                 width={providerListWidth}
                 t={t}
+                disabled={mediaSettingsLocked}
               />
               <div
                 onMouseDown={(e) => handleResizeStart(e, 'providerList')}
@@ -910,6 +925,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
                 onSelect={setASRProvider}
                 width={providerListWidth}
                 t={t}
+                disabled={mediaSettingsLocked}
               />
               <div
                 onMouseDown={(e) => handleResizeStart(e, 'providerList')}
@@ -977,7 +993,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
               {activeSection === 'image' && (
                 <ImageSettings selectedProviderId={selectedImageProviderId} />
               )}
-              {activeSection === 'video' && (
+              {!videoSettingsHidden && activeSection === 'video' && (
                 <VideoSettings selectedProviderId={selectedVideoProviderId} />
               )}
               {activeSection === 'tts' && <TTSSettings selectedProviderId={ttsProviderId} />}

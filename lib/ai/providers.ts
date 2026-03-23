@@ -669,6 +669,13 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     icon: '/logos/minimax.svg',
     models: [
       {
+        id: 'MiniMax-M2.7',
+        name: 'MiniMax M2.7',
+        contextWindow: 204800,
+        outputWindow: 8192,
+        capabilities: { streaming: true, tools: true, vision: false },
+      },
+      {
         id: 'MiniMax-M2.5',
         name: 'MiniMax M2.5',
         contextWindow: 204800,

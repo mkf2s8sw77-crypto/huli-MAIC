@@ -6,6 +6,7 @@ import { Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { withBasePath } from '@/lib/utils/base-path';
+import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
 
 interface AgentRevealModalProps {
   agents: Array<{
@@ -233,7 +234,9 @@ export function AgentRevealModal({ agents, open, onClose, onAllRevealed }: Agent
                             >
                               {isUrl(agent.avatar) ? (
                                 <img
-                                  src={withBasePath(agent.avatar)}
+                                  src={withBasePath(
+                                    normalizeAgentAvatar(agent.avatar, { role: agent.role }),
+                                  )}
                                   alt={agent.name}
                                   className="size-full rounded-full object-cover"
                                 />

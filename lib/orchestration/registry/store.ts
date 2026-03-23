@@ -11,6 +11,7 @@ import { USER_AVATAR } from '@/lib/types/roundtable';
 import type { Participant, ParticipantRole } from '@/lib/types/roundtable';
 import { useUserProfileStore } from '@/lib/store/user-profile';
 import type { AgentInfo } from '@/lib/generation/pipeline-types';
+import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
 
 interface AgentRegistryState {
   agents: Record<string, AgentConfig>; // Map of agentId -> config
@@ -350,6 +351,7 @@ export async function loadGeneratedAgentsForStage(stageId: string): Promise<stri
   for (const record of records) {
     registry.addAgent({
       ...record,
+      avatar: normalizeAgentAvatar(record.avatar, { role: record.role }),
       allowedActions: getActionsForRole(record.role),
       isDefault: false,
       isGenerated: true,
@@ -391,7 +393,12 @@ export async function saveGeneratedAgents(
   }
 
   // Write to IndexedDB
-  const records = agents.map((a) => ({ ...a, stageId, createdAt: Date.now() }));
+  const records = agents.map((a) => ({
+    ...a,
+    avatar: normalizeAgentAvatar(a.avatar, { role: a.role }),
+    stageId,
+    createdAt: Date.now(),
+  }));
   await db.generatedAgents.bulkPut(records);
 
   // Add to registry

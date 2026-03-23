@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ImageProviderId } from '@/lib/media/types';
+import { MEDIA_SETTINGS_LOCKED } from '@/lib/config/media-settings';
 
 interface ImageSettingsProps {
   selectedProviderId: ImageProviderId;
@@ -60,6 +61,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
     [currentConfig?.customModels],
   );
   const isServerConfigured = !!currentConfig?.isServerConfigured;
+  const isReadOnly = MEDIA_SETTINGS_LOCKED;
 
   const handleApiKeyChange = (apiKey: string) => {
     setImageProviderConfig(selectedProviderId, { apiKey });
@@ -147,7 +149,6 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
           {t('settings.serverConfiguredNotice')}
         </div>
       )}
-
       {/* API Key + Test inline */}
       <div className="space-y-2">
         <Label>API Key</Label>
@@ -164,11 +165,13 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
                 isServerConfigured ? t('settings.optionalOverride') : t('settings.enterApiKey')
               }
               value={currentConfig?.apiKey || ''}
+              disabled={isReadOnly}
               onChange={(e) => handleApiKeyChange(e.target.value)}
               className="h-8 pr-8"
             />
             <button
               type="button"
+              disabled={isReadOnly}
               onClick={() => setShowApiKey(!showApiKey)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
@@ -179,7 +182,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
             variant="outline"
             size="sm"
             onClick={handleTest}
-            disabled={testLoading || (!currentConfig?.apiKey && !isServerConfigured)}
+            disabled={isReadOnly || testLoading || (!currentConfig?.apiKey && !isServerConfigured)}
             className="gap-1.5"
           >
             {testLoading ? (
@@ -222,6 +225,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
           autoCorrect="off"
           spellCheck={false}
           value={currentConfig?.baseUrl || ''}
+          disabled={isReadOnly}
           onChange={(e) => handleBaseUrlChange(e.target.value)}
           placeholder={
             currentConfig?.serverBaseUrl ||
@@ -249,7 +253,13 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Label className="text-base">{t('settings.models')}</Label>
-          <Button variant="outline" size="sm" onClick={handleOpenAddModel} className="gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenAddModel}
+            disabled={isReadOnly}
+            className="gap-1.5"
+          >
             <Plus className="h-3.5 w-3.5" />
             {t('settings.addNewModel')}
           </Button>
@@ -284,6 +294,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
                   variant="outline"
                   size="sm"
                   className="h-8 px-2"
+                  disabled={isReadOnly}
                   onClick={() => handleOpenEditModel(index)}
                   title={t('settings.editModel')}
                 >
@@ -293,6 +304,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
                   variant="outline"
                   size="sm"
                   className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  disabled={isReadOnly}
                   onClick={() => handleDeleteModel(index)}
                   title={t('settings.deleteModel')}
                 >
@@ -318,6 +330,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
               <Label>{t('settings.modelId')}</Label>
               <Input
                 value={modelForm.id}
+                disabled={isReadOnly}
                 onChange={(e) => setModelForm((prev) => ({ ...prev, id: e.target.value }))}
                 placeholder="e.g. my-custom-model-v1"
                 className="h-8 font-mono text-sm"
@@ -327,6 +340,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
               <Label>{t('settings.modelName')}</Label>
               <Input
                 value={modelForm.name}
+                disabled={isReadOnly}
                 onChange={(e) => setModelForm((prev) => ({ ...prev, name: e.target.value }))}
                 placeholder="e.g. My Custom Model"
                 className="h-8 text-sm"
@@ -336,7 +350,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
               <Button variant="outline" size="sm" onClick={() => setShowModelDialog(false)}>
                 {t('common.cancel')}
               </Button>
-              <Button size="sm" onClick={handleSaveModel} disabled={!modelForm.id.trim()}>
+              <Button size="sm" onClick={handleSaveModel} disabled={isReadOnly || !modelForm.id.trim()}>
                 {t('common.save')}
               </Button>
             </div>

@@ -11,6 +11,7 @@ import type { PercentageGeometry } from '@/lib/types/action';
 export function getElementPercentageGeometry(
   element: PPTElement,
   viewportSize: number = 1000,
+  viewportRatio: number = 9 / 16,
 ): PercentageGeometry | null {
   // Only positioned elements have left/top/width/height
   if (
@@ -26,9 +27,9 @@ export function getElementPercentageGeometry(
 
   // Calculate percentage coordinates (relative to viewportSize)
   const x = (left / viewportSize) * 100;
-  const y = (top / (viewportSize * 0.5625)) * 100; // 16:9 ratio
+  const y = (top / (viewportSize * viewportRatio)) * 100;
   const w = (width / viewportSize) * 100;
-  const h = (height / (viewportSize * 0.5625)) * 100;
+  const h = (height / (viewportSize * viewportRatio)) * 100;
 
   // Calculate center point
   const centerX = x + w / 2;
@@ -57,6 +58,7 @@ export function findElementGeometry(
   scene: Record<string, any>,
   elementId: string,
   viewportSize: number = 1000,
+  viewportRatio: number = 9 / 16,
 ): PercentageGeometry | null {
   // Support two scene structures:
   // 1. scene.elements (old format)
@@ -82,7 +84,7 @@ export function findElementGeometry(
     return null;
   }
 
-  return getElementPercentageGeometry(element, viewportSize);
+  return getElementPercentageGeometry(element, viewportSize, viewportRatio);
 }
 
 /**

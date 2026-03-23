@@ -91,6 +91,7 @@
 
 import type { TTSModelConfig } from './types';
 import { TTS_PROVIDERS } from './constants';
+import { WebSocket } from 'ws';
 
 /**
  * Result of TTS generation
@@ -129,6 +130,9 @@ export async function generateTTS(
 
     case 'qwen-tts':
       return await generateQwenTTS(config, text);
+
+    case 'minimax-tts':
+      return await generateMiniMaxTTS(config, text);
 
     case 'browser-native-tts':
       throw new Error(
@@ -314,6 +318,128 @@ async function generateQwenTTS(config: TTSModelConfig, text: string): Promise<TT
     audio: new Uint8Array(arrayBuffer),
     format: 'wav', // Qwen3 TTS returns WAV format
   };
+}
+
+async function generateMiniMaxTTS(
+  config: TTSModelConfig,
+  text: string,
+): Promise<TTSGenerationResult> {
+  const url = config.baseUrl || TTS_PROVIDERS['minimax-tts'].defaultBaseUrl!;
+  const model = 'speech-2.8-hd';
+
+  return new Promise<TTSGenerationResult>((resolve, reject) => {
+    const ws = new WebSocket(url, {
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+    });
+
+    const audioChunks: Buffer[] = [];
+    let settled = false;
+    let started = false;
+    let sentText = false;
+    let timeout: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      finish(new Error('MiniMax TTS websocket timed out'));
+    }, 45000);
+
+    const clearTimer = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
+      }
+    };
+
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimer();
+      try {
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({ event: 'task_finish' }));
+        }
+      } catch {
+        // ignore
+      }
+      try {
+        ws.close();
+      } catch {
+        // ignore
+      }
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve({
+        audio: new Uint8Array(Buffer.concat(audioChunks)),
+        format: 'mp3',
+      });
+    };
+
+    ws.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.base_resp?.status_code && msg.base_resp.status_code !== 0) {
+          finish(new Error(msg.base_resp.status_msg || 'MiniMax TTS request failed'));
+          return;
+        }
+
+        if (msg.event === 'connected_success') {
+          ws.send(
+            JSON.stringify({
+              event: 'task_start',
+              model,
+              voice_setting: {
+                voice_id: config.voice,
+                speed: config.speed || 1,
+                vol: 1,
+                pitch: 0,
+                english_normalization: false,
+              },
+              audio_setting: {
+                sample_rate: 32000,
+                bitrate: 128000,
+                format: 'mp3',
+                channel: 1,
+              },
+            }),
+          );
+          return;
+        }
+
+        if (msg.event === 'task_started' && !sentText) {
+          started = true;
+          sentText = true;
+          ws.send(
+            JSON.stringify({
+              event: 'task_continue',
+              text,
+            }),
+          );
+          return;
+        }
+
+        if (msg?.data?.audio) {
+          audioChunks.push(Buffer.from(msg.data.audio, 'hex'));
+        }
+
+        if (msg.is_final) {
+          finish();
+        }
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+
+    ws.on('error', (error) => {
+      finish(error instanceof Error ? error : new Error(String(error)));
+    });
+
+    ws.on('close', () => {
+      if (!settled && !started) {
+        finish(new Error('MiniMax TTS websocket closed before task started'));
+      }
+    });
+  });
 }
 
 /**

@@ -28,6 +28,14 @@ export const commonZhCN = {
     ttsHint: '选择 AI 教师的朗读音色',
     ttsPreview: '试听',
     ttsPreviewing: '播放中...',
+    viewportPreset: '比例',
+    viewportPresetHint: '选择课程页面比例',
+  },
+  viewport: {
+    '16:9': '横版 16:9',
+    '4:3': '横版 4:3',
+    '3:4': '竖版 3:4',
+    '9:16': '竖版 9:16',
   },
   export: {
     pptx: '导出 PPTX',
@@ -69,6 +77,14 @@ export const commonEnUS = {
     ttsHint: 'Choose a voice for the AI teacher',
     ttsPreview: 'Preview',
     ttsPreviewing: 'Playing...',
+    viewportPreset: 'Layout',
+    viewportPresetHint: 'Choose the classroom page aspect ratio',
+  },
+  viewport: {
+    '16:9': 'Landscape 16:9',
+    '4:3': 'Landscape 4:3',
+    '3:4': 'Portrait 3:4',
+    '9:16': 'Portrait 9:16',
   },
   export: {
     pptx: 'Export PPTX',

@@ -46,6 +46,9 @@ export interface StageRecord {
   updatedAt: number; // timestamp
   language?: string;
   style?: string;
+  viewportPreset?: string;
+  viewportSize?: number;
+  viewportRatio?: number;
   currentSceneId?: string;
 }
 

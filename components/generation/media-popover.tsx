@@ -38,6 +38,7 @@ import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
 import type { TTSProviderId, ASRProviderId } from '@/lib/audio/types';
 import type { SettingsSection } from '@/lib/types/settings';
 import { withBasePath } from '@/lib/utils/base-path';
+import { MEDIA_SETTINGS_LOCKED, VIDEO_SETTINGS_HIDDEN } from '@/lib/config/media-settings';
 
 interface MediaPopoverProps {
   onSettingsOpen: (section: SettingsSection) => void;
@@ -48,6 +49,7 @@ const IMAGE_PROVIDER_ICONS: Record<string, string> = {
   seedream: '/logos/doubao.svg',
   'qwen-image': '/logos/bailian.svg',
   'nano-banana': '/logos/gemini.svg',
+  'minimax-image': '/logos/minimax.svg',
 };
 const VIDEO_PROVIDER_ICONS: Record<string, string> = {
   seedance: '/logos/doubao.svg',
@@ -87,6 +89,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'azure-tts': t('settings.providerAzureTTS'),
     'glm-tts': t('settings.providerGLMTTS'),
     'qwen-tts': t('settings.providerQwenTTS'),
+    'minimax-tts': t('settings.providerMiniMaxTTS'),
     'browser-native-tts': t('settings.providerBrowserNativeTTS'),
   };
   return names[providerId] || providerId;
@@ -149,10 +152,13 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
     tts: ttsEnabled,
     asr: asrEnabled,
   };
+  const mediaSettingsLocked = MEDIA_SETTINGS_LOCKED;
+  const videoSettingsHidden = VIDEO_SETTINGS_HIDDEN;
+  const visibleTabs = TABS.filter((tab) => !videoSettingsHidden || tab.id !== 'video');
 
   const enabledCount = [
     imageGenerationEnabled,
-    videoGenerationEnabled,
+    !videoSettingsHidden && videoGenerationEnabled,
     ttsEnabled,
     asrEnabled,
   ].filter(Boolean).length;
@@ -313,7 +319,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
     }
     setOpen(isOpen);
     if (isOpen) {
-      const first = (['image', 'video', 'tts', 'asr'] as TabId[]).find((id) => enabledMap[id]);
+      const first = visibleTabs.map((tab) => tab.id).find((id) => enabledMap[id]);
       setActiveTab(first || 'image');
     }
   };
@@ -331,7 +337,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
         >
           <SlidersHorizontal className="size-3.5" />
           {imageGenerationEnabled && <ImageIcon className="size-3.5" />}
-          {videoGenerationEnabled && <Video className="size-3.5" />}
+          {!videoSettingsHidden && videoGenerationEnabled && <Video className="size-3.5" />}
           {ttsEnabled && <Volume2 className="size-3.5" />}
           {asrEnabled && <Mic className="size-3.5" />}
         </button>
@@ -341,7 +347,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
         {/* ── Tab bar (segmented control) ── */}
         <div className="p-2 pb-0">
           <div className="flex gap-0.5 p-0.5 bg-muted/60 rounded-lg">
-            {TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const isActive = activeTab === tab.id;
               const isEnabled = enabledMap[tab.id];
               const Icon = tab.icon;
@@ -375,11 +381,13 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
               label={t('media.imageCapability')}
               enabled={imageGenerationEnabled}
               onToggle={setImageGenerationEnabled}
+              readOnly={mediaSettingsLocked}
             >
               <GroupedSelect
                 groups={imageGroups}
                 selectedGroupId={imageProviderId}
                 selectedItemId={imageModelId}
+                disabled={mediaSettingsLocked}
                 onSelect={(gid, iid) => {
                   setImageProvider(gid as ImageProviderId);
                   setImageModelId(iid);
@@ -388,17 +396,19 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
             </TabPanel>
           )}
 
-          {activeTab === 'video' && (
+          {!videoSettingsHidden && activeTab === 'video' && (
             <TabPanel
               icon={Video}
               label={t('media.videoCapability')}
               enabled={videoGenerationEnabled}
               onToggle={setVideoGenerationEnabled}
+              readOnly={mediaSettingsLocked}
             >
               <GroupedSelect
                 groups={videoGroups}
                 selectedGroupId={videoProviderId}
                 selectedItemId={videoModelId}
+                disabled={mediaSettingsLocked}
                 onSelect={(gid, iid) => {
                   setVideoProvider(gid as VideoProviderId);
                   setVideoModelId(iid);
@@ -413,6 +423,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
               label={t('media.ttsCapability')}
               enabled={ttsEnabled}
               onToggle={setTTSEnabled}
+              readOnly={mediaSettingsLocked}
             >
               {/* Provider + Voice grouped select + preview */}
               <div className="flex items-center gap-2">
@@ -421,6 +432,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
                     groups={ttsGroups}
                     selectedGroupId={ttsProviderId}
                     selectedItemId={ttsVoice}
+                    disabled={mediaSettingsLocked}
                     onSelect={(gid, iid) => {
                       if (gid !== ttsProviderId) {
                         setTTSProvider(gid as TTSProviderId);
@@ -431,8 +443,10 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
                 </div>
                 <button
                   onClick={handlePreview}
+                  disabled={mediaSettingsLocked}
                   className={cn(
                     'inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-all shrink-0',
+                    mediaSettingsLocked && 'cursor-not-allowed opacity-50',
                     previewing
                       ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300'
                       : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -457,6 +471,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
                     min={ttsSpeedRange.min}
                     max={ttsSpeedRange.max}
                     step={0.1}
+                    disabled={mediaSettingsLocked}
                     className="flex-1"
                   />
                   <span className="text-[10px] text-muted-foreground tabular-nums w-7 text-right">
@@ -473,11 +488,13 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
               label={t('media.asrCapability')}
               enabled={asrEnabled}
               onToggle={setASREnabled}
+              readOnly={mediaSettingsLocked}
             >
               <GroupedSelect
                 groups={asrGroups}
                 selectedGroupId={asrProviderId}
                 selectedItemId={asrLanguage}
+                disabled={mediaSettingsLocked}
                 onSelect={(gid, iid) => {
                   setASRProvider(gid as ASRProviderId);
                   setASRLanguage(iid);
@@ -511,12 +528,14 @@ function TabPanel({
   label,
   enabled,
   onToggle,
+  readOnly = false,
   children,
 }: {
   icon: LucideIcon;
   label: string;
   enabled: boolean;
   onToggle: (v: boolean) => void;
+  readOnly?: boolean;
   children?: React.ReactNode;
 }) {
   return (
@@ -539,6 +558,7 @@ function TabPanel({
         <Switch
           checked={enabled}
           onCheckedChange={onToggle}
+          disabled={readOnly}
           className="scale-[0.85] origin-right"
         />
       </div>
@@ -560,11 +580,13 @@ function GroupedSelect({
   groups,
   selectedGroupId,
   selectedItemId,
+  disabled = false,
   onSelect,
 }: {
   groups: SelectGroupData[];
   selectedGroupId: string;
   selectedItemId: string;
+  disabled?: boolean;
   onSelect: (groupId: string, itemId: string) => void;
 }) {
   const composite = `${selectedGroupId}::${selectedItemId}`;
@@ -578,6 +600,7 @@ function GroupedSelect({
   return (
     <Select
       value={composite}
+      disabled={disabled}
       onValueChange={(v) => {
         const sep = v.indexOf('::');
         if (sep === -1) return;

@@ -45,6 +45,13 @@ import type {
   GenerationCallbacks,
 } from './pipeline-types';
 import { createLogger } from '@/lib/logger';
+import {
+  DEFAULT_VIEWPORT_PRESET,
+  DEFAULT_VIEWPORT_SIZE,
+  getViewportHeight,
+  getViewportRatio,
+  type ViewportPreset,
+} from '@/lib/config/viewport';
 const log = createLogger('Generation');
 
 // ==================== Stage 2: Full Scenes (Two-Step) ====================
@@ -155,6 +162,7 @@ export async function generateSceneContent(
   visionEnabled?: boolean,
   generatedMediaMapping?: ImageMapping,
   agents?: AgentInfo[],
+  viewport?: { viewportPreset?: ViewportPreset; viewportSize?: number; viewportRatio?: number },
 ): Promise<
   | GeneratedSlideContent
   | GeneratedQuizContent
@@ -168,15 +176,16 @@ export async function generateSceneContent(
       `Interactive outline "${outline.title}" missing interactiveConfig, falling back to slide`,
     );
     const fallbackOutline = { ...outline, type: 'slide' as const };
-    return generateSlideContent(
-      fallbackOutline,
-      aiCall,
-      assignedImages,
-      imageMapping,
-      visionEnabled,
-      generatedMediaMapping,
-      agents,
-    );
+      return generateSlideContent(
+        fallbackOutline,
+        aiCall,
+        assignedImages,
+        imageMapping,
+        visionEnabled,
+        generatedMediaMapping,
+        agents,
+        viewport,
+      );
   }
 
   switch (outline.type) {
@@ -189,6 +198,7 @@ export async function generateSceneContent(
         visionEnabled,
         generatedMediaMapping,
         agents,
+        viewport,
       );
     case 'quiz':
       return generateQuizContent(outline, aiCall);
@@ -466,6 +476,7 @@ async function generateSlideContent(
   visionEnabled?: boolean,
   generatedMediaMapping?: ImageMapping,
   agents?: AgentInfo[],
+  viewport?: { viewportPreset?: ViewportPreset; viewportSize?: number; viewportRatio?: number },
 ): Promise<GeneratedSlideContent | null> {
   const lang = outline.language || 'zh-CN';
 
@@ -530,8 +541,12 @@ async function generateSlideContent(
   }
 
   // Canvas dimensions (matching viewportSize and viewportRatio)
-  const canvasWidth = 1000;
-  const canvasHeight = 562.5;
+  const viewportPreset = viewport?.viewportPreset || DEFAULT_VIEWPORT_PRESET;
+  const canvasWidth = viewport?.viewportSize || DEFAULT_VIEWPORT_SIZE;
+  const canvasHeight =
+    viewport?.viewportRatio !== undefined
+      ? canvasWidth * viewport.viewportRatio
+      : getViewportHeight(canvasWidth, viewportPreset);
 
   const teacherContext = formatTeacherPersonaForPrompt(agents);
 
@@ -1207,7 +1222,11 @@ export function createSceneWithActions(
     | GeneratedPBLContent,
   actions: Action[],
   api: ReturnType<typeof createStageAPI>,
+  viewport?: { viewportPreset?: ViewportPreset; viewportSize?: number; viewportRatio?: number },
 ): string | null {
+  const viewportPreset = viewport?.viewportPreset || DEFAULT_VIEWPORT_PRESET;
+  const viewportSize = viewport?.viewportSize || DEFAULT_VIEWPORT_SIZE;
+  const viewportRatio = viewport?.viewportRatio || getViewportRatio(viewportPreset);
   if (outline.type === 'slide' && 'elements' in content) {
     // Build complete Slide object
     const defaultTheme: SlideTheme = {
@@ -1221,8 +1240,8 @@ export function createSceneWithActions(
 
     const slide: Slide = {
       id: nanoid(),
-      viewportSize: 1000,
-      viewportRatio: 0.5625,
+      viewportSize,
+      viewportRatio,
       theme: defaultTheme,
       elements: content.elements,
       background: content.background,

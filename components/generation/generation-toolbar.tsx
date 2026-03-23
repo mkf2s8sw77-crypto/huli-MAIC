@@ -22,6 +22,7 @@ import type { ProviderId } from '@/lib/ai/providers';
 import type { SettingsSection } from '@/lib/types/settings';
 import { MediaPopover } from '@/components/generation/media-popover';
 import { withBasePath } from '@/lib/utils/base-path';
+import { VIEWPORT_OPTIONS, type ViewportPreset } from '@/lib/config/viewport';
 
 // ─── Constants ───────────────────────────────────────────────
 const MAX_PDF_SIZE_MB = 50;
@@ -31,6 +32,8 @@ const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
 export interface GenerationToolbarProps {
   language: 'zh-CN' | 'en-US';
   onLanguageChange: (lang: 'zh-CN' | 'en-US') => void;
+  viewportPreset: ViewportPreset;
+  onViewportPresetChange: (preset: ViewportPreset) => void;
   webSearch: boolean;
   onWebSearchChange: (v: boolean) => void;
   onSettingsOpen: (section?: SettingsSection) => void;
@@ -44,6 +47,8 @@ export interface GenerationToolbarProps {
 export function GenerationToolbar({
   language,
   onLanguageChange,
+  viewportPreset,
+  onViewportPresetChange,
   webSearch,
   onWebSearchChange,
   onSettingsOpen,
@@ -376,6 +381,33 @@ export function GenerationToolbar({
         <TooltipContent>{t('toolbar.languageHint')}</TooltipContent>
       </Tooltip>
 
+      {/* ── Viewport preset ── */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div>
+            <Select
+              value={viewportPreset}
+              onValueChange={(value) => onViewportPresetChange(value as ViewportPreset)}
+            >
+              <SelectTrigger className="h-7 rounded-full border-border/50 bg-transparent px-2.5 text-xs shadow-none min-w-[84px]">
+                <span className="flex items-center gap-1.5 truncate">
+                  <span className="text-muted-foreground/70">{t('toolbar.viewportPreset')}</span>
+                  <SelectValue />
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {VIEWPORT_OPTIONS.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {t(`viewport.${option.id}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>{t('toolbar.viewportPresetHint')}</TooltipContent>
+      </Tooltip>
+
       {/* ── Separator ── */}
       <div className="w-px h-4 bg-border/60 mx-1" />
 
@@ -439,7 +471,7 @@ function ModelSelectorPopover({
             >
               {currentProviderConfig?.icon ? (
                 <img
-                  src={currentProviderConfig.icon}
+                  src={withBasePath(currentProviderConfig.icon)}
                   alt={currentProviderConfig.name}
                   className="size-4 rounded-sm"
                 />
@@ -515,7 +547,7 @@ function ModelSelectorPopover({
               <ChevronLeft className="size-3.5 text-muted-foreground" />
               {activeProvider.icon ? (
                 <img
-                  src={activeProvider.icon}
+                  src={withBasePath(activeProvider.icon)}
                   alt={activeProvider.name}
                   className="size-4 rounded-sm"
                 />

@@ -7,6 +7,7 @@
 
 import type { ActionType } from './action';
 import type { MediaGenerationRequest } from '@/lib/media/types';
+import type { ViewportPreset } from '@/lib/config/viewport';
 
 // ==================== PDF Image Types ====================
 
@@ -65,6 +66,7 @@ export interface UploadedDocument {
 export interface UserRequirements {
   requirement: string; // Single free-form text for all user input
   language: 'zh-CN' | 'en-US'; // Course language - critical for generation
+  viewportPreset?: ViewportPreset; // Slide viewport preset (default 3:4)
   userNickname?: string; // Student nickname for personalization
   userBio?: string; // Student background for personalization
   webSearch?: boolean; // Enable web search for richer context

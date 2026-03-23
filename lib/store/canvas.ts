@@ -4,6 +4,7 @@ import type { TextAttrs } from '@/lib/prosemirror/utils';
 import { defaultRichTextAttrs } from '@/lib/prosemirror/utils';
 import type { TextFormatPainter, ShapeFormatPainter, CreatingElement } from '@/lib/types/edit';
 import type { PercentageGeometry } from '@/lib/types/action';
+import { DEFAULT_VIEWPORT_PRESET, getViewportRatio } from '@/lib/config/viewport';
 
 /**
  * Spotlight options
@@ -196,7 +197,7 @@ const initialState = {
   canvasScale: 1,
   canvasPercentage: 90,
   viewportSize: 1000,
-  viewportRatio: 0.5625, // 16:9
+  viewportRatio: getViewportRatio(DEFAULT_VIEWPORT_PRESET),
   canvasDragged: false,
 
   // Display aids

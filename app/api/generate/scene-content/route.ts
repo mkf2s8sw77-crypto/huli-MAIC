@@ -18,6 +18,7 @@ import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generatio
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import type { ViewportPreset } from '@/lib/config/viewport';
 
 const log = createLogger('Scene Content API');
 
@@ -44,6 +45,9 @@ export async function POST(req: NextRequest) {
         description?: string;
         language?: string;
         style?: string;
+        viewportPreset?: ViewportPreset;
+        viewportSize?: number;
+        viewportRatio?: number;
       };
       stageId: string;
       agents?: AgentInfo[];
@@ -145,6 +149,11 @@ export async function POST(req: NextRequest) {
       hasVision,
       generatedMediaMapping,
       agents,
+      {
+        viewportPreset: stageInfo?.viewportPreset,
+        viewportSize: stageInfo?.viewportSize,
+        viewportRatio: stageInfo?.viewportRatio,
+      },
     );
 
     if (!content) {

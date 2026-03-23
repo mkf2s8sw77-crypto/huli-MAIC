@@ -15,6 +15,7 @@ import type {
   InteractiveContent,
   PBLContent,
 } from '@/lib/types/stage';
+import { DEFAULT_VIEWPORT_PRESET, DEFAULT_VIEWPORT_SIZE, getViewportRatio } from '@/lib/config/viewport';
 
 // ==================== Utility Functions ====================
 
@@ -47,8 +48,8 @@ export function createDefaultSlideContent(): SlideContent {
     type: 'slide',
     canvas: {
       id: generateId('slide'),
-      viewportSize: 1000,
-      viewportRatio: 0.5625, // 16:9
+      viewportSize: DEFAULT_VIEWPORT_SIZE,
+      viewportRatio: getViewportRatio(DEFAULT_VIEWPORT_PRESET),
       theme: {
         backgroundColor: '#ffffff',
         themeColors: ['#5b9bd5', '#ed7d31', '#a5a5a5', '#ffc000', '#4472c4'],

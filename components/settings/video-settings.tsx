@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { VideoProviderId } from '@/lib/media/types';
+import { MEDIA_SETTINGS_LOCKED } from '@/lib/config/media-settings';
 
 interface VideoSettingsProps {
   selectedProviderId: VideoProviderId;
@@ -59,6 +60,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
     [currentConfig?.customModels],
   );
   const isServerConfigured = !!currentConfig?.isServerConfigured;
+  const isReadOnly = MEDIA_SETTINGS_LOCKED;
 
   const handleApiKeyChange = (apiKey: string) => {
     setVideoProviderConfig(selectedProviderId, { apiKey });
@@ -146,7 +148,6 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
           {t('settings.serverConfiguredNotice')}
         </div>
       )}
-
       {/* API Key + Test inline */}
       <div className="space-y-2">
         <Label>API Key</Label>
@@ -167,11 +168,13 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
                     : t('settings.enterApiKey')
               }
               value={currentConfig?.apiKey || ''}
+              disabled={isReadOnly}
               onChange={(e) => handleApiKeyChange(e.target.value)}
               className="h-8 pr-8"
             />
             <button
               type="button"
+              disabled={isReadOnly}
               onClick={() => setShowApiKey(!showApiKey)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
@@ -182,7 +185,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
             variant="outline"
             size="sm"
             onClick={handleTest}
-            disabled={testLoading || (!currentConfig?.apiKey && !isServerConfigured)}
+            disabled={isReadOnly || testLoading || (!currentConfig?.apiKey && !isServerConfigured)}
             className="gap-1.5"
           >
             {testLoading ? (
@@ -225,6 +228,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
           autoCorrect="off"
           spellCheck={false}
           value={currentConfig?.baseUrl || ''}
+          disabled={isReadOnly}
           onChange={(e) => handleBaseUrlChange(e.target.value)}
           placeholder={
             currentConfig?.serverBaseUrl ||
@@ -252,7 +256,13 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Label className="text-base">{t('settings.models')}</Label>
-          <Button variant="outline" size="sm" onClick={handleOpenAddModel} className="gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenAddModel}
+            disabled={isReadOnly}
+            className="gap-1.5"
+          >
             <Plus className="h-3.5 w-3.5" />
             {t('settings.addNewModel')}
           </Button>
@@ -287,6 +297,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
                   variant="outline"
                   size="sm"
                   className="h-8 px-2"
+                  disabled={isReadOnly}
                   onClick={() => handleOpenEditModel(index)}
                   title={t('settings.editModel')}
                 >
@@ -296,6 +307,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
                   variant="outline"
                   size="sm"
                   className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  disabled={isReadOnly}
                   onClick={() => handleDeleteModel(index)}
                   title={t('settings.deleteModel')}
                 >
@@ -321,6 +333,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
               <Label>{t('settings.modelId')}</Label>
               <Input
                 value={modelForm.id}
+                disabled={isReadOnly}
                 onChange={(e) => setModelForm((prev) => ({ ...prev, id: e.target.value }))}
                 placeholder="e.g. my-custom-model-v1"
                 className="h-8 font-mono text-sm"
@@ -330,6 +343,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
               <Label>{t('settings.modelName')}</Label>
               <Input
                 value={modelForm.name}
+                disabled={isReadOnly}
                 onChange={(e) => setModelForm((prev) => ({ ...prev, name: e.target.value }))}
                 placeholder="e.g. My Custom Model"
                 className="h-8 text-sm"
@@ -339,7 +353,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
               <Button variant="outline" size="sm" onClick={() => setShowModelDialog(false)}>
                 {t('common.cancel')}
               </Button>
-              <Button size="sm" onClick={handleSaveModel} disabled={!modelForm.id.trim()}>
+              <Button size="sm" onClick={handleSaveModel} disabled={isReadOnly || !modelForm.id.trim()}>
                 {t('common.save')}
               </Button>
             </div>

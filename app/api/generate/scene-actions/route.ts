@@ -26,6 +26,7 @@ import type { SpeechAction } from '@/lib/types/action';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import type { ViewportPreset } from '@/lib/config/viewport';
 
 const log = createLogger('Scene Actions API');
 
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
       allOutlines,
       content,
       stageId,
+      stageInfo,
       agents,
       previousSpeeches: incomingPreviousSpeeches,
       userProfile,
@@ -51,6 +53,11 @@ export async function POST(req: NextRequest) {
         | GeneratedInteractiveContent
         | GeneratedPBLContent;
       stageId: string;
+      stageInfo?: {
+        viewportPreset?: ViewportPreset;
+        viewportSize?: number;
+        viewportRatio?: number;
+      };
       agents?: AgentInfo[];
       previousSpeeches?: string[];
       userProfile?: string;
@@ -133,7 +140,11 @@ export async function POST(req: NextRequest) {
     log.info(`Generated ${actions.length} actions for: "${outline.title}"`);
 
     // ── Build complete scene ──
-    const scene = buildCompleteScene(outline, content, actions, stageId);
+    const scene = buildCompleteScene(outline, content, actions, stageId, {
+      viewportPreset: stageInfo?.viewportPreset,
+      viewportSize: stageInfo?.viewportSize,
+      viewportRatio: stageInfo?.viewportRatio,
+    });
 
     if (!scene) {
       log.error(`Failed to build scene: "${outline.title}"`);

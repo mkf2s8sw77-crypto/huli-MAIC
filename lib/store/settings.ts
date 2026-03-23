@@ -9,7 +9,7 @@ import type { ProviderId } from '@/lib/ai/providers';
 import type { ProvidersConfig } from '@/lib/types/settings';
 import { PROVIDERS } from '@/lib/ai/providers';
 import type { TTSProviderId, ASRProviderId } from '@/lib/audio/types';
-import { ASR_PROVIDERS, DEFAULT_TTS_VOICES } from '@/lib/audio/constants';
+import { ASR_PROVIDERS, DEFAULT_TTS_VOICES, TTS_PROVIDERS } from '@/lib/audio/constants';
 import type { PDFProviderId } from '@/lib/pdf/types';
 import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
 import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
@@ -264,6 +264,7 @@ const getDefaultAudioConfig = () => ({
     'azure-tts': { apiKey: '', baseUrl: '', enabled: false },
     'glm-tts': { apiKey: '', baseUrl: '', enabled: false },
     'qwen-tts': { apiKey: '', baseUrl: '', enabled: false },
+    'minimax-tts': { apiKey: '', baseUrl: '', enabled: false },
     'browser-native-tts': { apiKey: '', baseUrl: '', enabled: true },
   } as Record<TTSProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
   asrProvidersConfig: {
@@ -290,6 +291,7 @@ const getDefaultImageConfig = () => ({
     seedream: { apiKey: '', baseUrl: '', enabled: false },
     'qwen-image': { apiKey: '', baseUrl: '', enabled: false },
     'nano-banana': { apiKey: '', baseUrl: '', enabled: false },
+    'minimax-image': { apiKey: '', baseUrl: '', enabled: false },
   } as Record<ImageProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
@@ -348,6 +350,56 @@ function ensureBuiltInProviders(state: Partial<SettingsState>): void {
       };
     }
   });
+}
+
+function ensureBuiltInMediaProviders(state: Partial<SettingsState>): void {
+  if (state.ttsProvidersConfig) {
+    for (const providerId of Object.keys(TTS_PROVIDERS) as TTSProviderId[]) {
+      if (!state.ttsProvidersConfig[providerId]) {
+        state.ttsProvidersConfig[providerId] = {
+          apiKey: '',
+          baseUrl: '',
+          enabled: providerId === 'openai-tts' || providerId === 'browser-native-tts',
+        };
+      }
+    }
+  }
+
+  if (state.asrProvidersConfig) {
+    for (const providerId of Object.keys(ASR_PROVIDERS) as ASRProviderId[]) {
+      if (!state.asrProvidersConfig[providerId]) {
+        state.asrProvidersConfig[providerId] = {
+          apiKey: '',
+          baseUrl: '',
+          enabled: providerId === 'openai-whisper' || providerId === 'browser-native',
+        };
+      }
+    }
+  }
+
+  if (state.imageProvidersConfig) {
+    for (const providerId of Object.keys(IMAGE_PROVIDERS) as ImageProviderId[]) {
+      if (!state.imageProvidersConfig[providerId]) {
+        state.imageProvidersConfig[providerId] = {
+          apiKey: '',
+          baseUrl: '',
+          enabled: false,
+        };
+      }
+    }
+  }
+
+  if (state.videoProvidersConfig) {
+    for (const providerId of Object.keys(VIDEO_PROVIDERS) as VideoProviderId[]) {
+      if (!state.videoProvidersConfig[providerId]) {
+        state.videoProvidersConfig[providerId] = {
+          apiKey: '',
+          baseUrl: '',
+          enabled: false,
+        };
+      }
+    }
+  }
 }
 
 // Migrate from old localStorage format
@@ -815,10 +867,11 @@ export const useSettingsStore = create<SettingsState>()(
                 }
               }
 
-              // === Auto-select / auto-enable (only on first run) ===
+              // === Auto-select / auto-enable ===
               let autoTtsProvider: TTSProviderId | undefined;
               let autoTtsVoice: string | undefined;
               let autoAsrProvider: ASRProviderId | undefined;
+              let autoAsrLanguage: string | undefined;
               let autoPdfProvider: PDFProviderId | undefined;
               let autoImageProvider: ImageProviderId | undefined;
               let autoImageModel: string | undefined;
@@ -827,6 +880,42 @@ export const useSettingsStore = create<SettingsState>()(
               let autoImageEnabled: boolean | undefined;
               let autoVideoEnabled: boolean | undefined;
 
+              const serverTtsIds = Object.keys(data.tts) as TTSProviderId[];
+              const serverAsrIds = Object.keys(data.asr) as ASRProviderId[];
+              const serverImageIds = Object.keys(data.image) as ImageProviderId[];
+              const serverVideoIds = Object.keys(data.video || {}) as VideoProviderId[];
+
+              // Prefer server providers when the current selection is browser-native
+              // or otherwise not server-configured and has no explicit local key.
+              if (
+                serverTtsIds.length > 0 &&
+                !newTTSConfig[state.ttsProviderId]?.isServerConfigured &&
+                !state.ttsProvidersConfig[state.ttsProviderId]?.apiKey
+              ) {
+                autoTtsProvider = serverTtsIds[0];
+                autoTtsVoice = DEFAULT_TTS_VOICES[autoTtsProvider] || 'default';
+              }
+
+              if (
+                serverAsrIds.length > 0 &&
+                !newASRConfig[state.asrProviderId]?.isServerConfigured &&
+                !state.asrProvidersConfig[state.asrProviderId]?.apiKey
+              ) {
+                autoAsrProvider = serverAsrIds[0];
+                autoAsrLanguage = ASR_PROVIDERS[autoAsrProvider]?.supportedLanguages?.[0] || 'auto';
+              }
+
+              if (
+                serverImageIds.length > 0 &&
+                !newImageConfig[state.imageProviderId]?.isServerConfigured &&
+                !state.imageProvidersConfig[state.imageProviderId]?.apiKey
+              ) {
+                autoImageProvider = serverImageIds[0];
+                const models = IMAGE_PROVIDERS[autoImageProvider]?.models;
+                if (models?.length) autoImageModel = models[0].id;
+                if (!state.imageGenerationEnabled) autoImageEnabled = true;
+              }
+
               if (!state.autoConfigApplied) {
                 // PDF: unpdf → mineru if server has it
                 if (newPDFConfig.mineru?.isServerConfigured && state.pdfProviderId === 'unpdf') {
@@ -834,7 +923,6 @@ export const useSettingsStore = create<SettingsState>()(
                 }
 
                 // TTS: select first server provider if current is not server-configured
-                const serverTtsIds = Object.keys(data.tts) as TTSProviderId[];
                 if (
                   serverTtsIds.length > 0 &&
                   !newTTSConfig[state.ttsProviderId]?.isServerConfigured
@@ -843,17 +931,15 @@ export const useSettingsStore = create<SettingsState>()(
                   autoTtsVoice = DEFAULT_TTS_VOICES[autoTtsProvider] || 'default';
                 }
 
-                // ASR: select first server provider if current is not server-configured
-                const serverAsrIds = Object.keys(data.asr) as ASRProviderId[];
                 if (
                   serverAsrIds.length > 0 &&
                   !newASRConfig[state.asrProviderId]?.isServerConfigured
                 ) {
                   autoAsrProvider = serverAsrIds[0];
+                  autoAsrLanguage = ASR_PROVIDERS[autoAsrProvider]?.supportedLanguages?.[0] || 'auto';
                 }
 
                 // Image: first server provider
-                const serverImageIds = Object.keys(data.image) as ImageProviderId[];
                 if (
                   serverImageIds.length > 0 &&
                   !newImageConfig[state.imageProviderId]?.isServerConfigured
@@ -867,7 +953,6 @@ export const useSettingsStore = create<SettingsState>()(
                 }
 
                 // Video: first server provider
-                const serverVideoIds = Object.keys(data.video || {}) as VideoProviderId[];
                 if (
                   serverVideoIds.length > 0 &&
                   !newVideoConfig[state.videoProviderId]?.isServerConfigured
@@ -916,6 +1001,7 @@ export const useSettingsStore = create<SettingsState>()(
                   ttsVoice: autoTtsVoice,
                 }),
                 ...(autoAsrProvider && { asrProviderId: autoAsrProvider }),
+                ...(autoAsrLanguage && { asrLanguage: autoAsrLanguage }),
                 ...(autoImageProvider && {
                   imageProviderId: autoImageProvider,
                 }),
@@ -1048,6 +1134,8 @@ export const useSettingsStore = create<SettingsState>()(
           delete stateRecord.webSearchIsServerConfigured;
         }
 
+        ensureBuiltInMediaProviders(state);
+
         return state;
       },
       // Custom merge: always sync built-in providers on every rehydrate,
@@ -1055,6 +1143,7 @@ export const useSettingsStore = create<SettingsState>()(
       merge: (persistedState, currentState) => {
         const merged = { ...currentState, ...(persistedState as object) };
         ensureBuiltInProviders(merged as Partial<SettingsState>);
+        ensureBuiltInMediaProviders(merged as Partial<SettingsState>);
         return merged as SettingsState;
       },
     },

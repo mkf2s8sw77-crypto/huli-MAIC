@@ -11,6 +11,7 @@ import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import { Sparkles, ChevronDown, ChevronUp, Shuffle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { withBasePath } from '@/lib/utils/base-path';
+import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
 
 export function AgentBar() {
   const { t } = useI18n();
@@ -87,7 +88,7 @@ export function AgentBar() {
       {teacherAgent && (
         <div className="size-8 rounded-full overflow-hidden ring-2 ring-blue-400/40 dark:ring-blue-500/30 shrink-0">
           <img
-            src={withBasePath(teacherAgent.avatar)}
+            src={withBasePath(normalizeAgentAvatar(teacherAgent.avatar, { role: teacherAgent.role }))}
             alt={getAgentName(teacherAgent)}
             className="size-full object-cover"
           />
@@ -101,7 +102,11 @@ export function AgentBar() {
             {agents.find((a) => a.role === 'assistant') && (
               <div className="size-6 rounded-full overflow-hidden ring-[1.5px] ring-background">
                 <img
-                  src={withBasePath(agents.find((a) => a.role === 'assistant')!.avatar)}
+                  src={withBasePath(
+                    normalizeAgentAvatar(agents.find((a) => a.role === 'assistant')!.avatar, {
+                      role: 'assistant',
+                    }),
+                  )}
                   alt=""
                   className="size-full object-cover"
                 />
@@ -121,7 +126,7 @@ export function AgentBar() {
                   className="size-6 rounded-full overflow-hidden ring-[1.5px] ring-background"
                 >
                   <img
-                    src={withBasePath(agent.avatar)}
+                    src={withBasePath(normalizeAgentAvatar(agent.avatar, { role: agent.role }))}
                     alt={getAgentName(agent)}
                     className="size-full object-cover"
                   />
@@ -238,7 +243,9 @@ export function AgentBar() {
                             }}
                           >
                             <img
-                              src={withBasePath(agent.avatar)}
+                              src={withBasePath(
+                                normalizeAgentAvatar(agent.avatar, { role: agent.role }),
+                              )}
                               alt={getAgentName(agent)}
                               className="size-full object-cover"
                             />

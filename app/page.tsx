@@ -48,17 +48,25 @@ import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
 import { withBasePath } from '@/lib/utils/base-path';
 import { LICENSE_URL, SOURCE_CODE_URL } from '@/lib/constants/open-source';
+import {
+  DEFAULT_VIEWPORT_PRESET,
+  VIEWPORT_OPTIONS,
+  type ViewportPreset,
+  getAspectRatioCssValueByRatio,
+} from '@/lib/config/viewport';
 
 const log = createLogger('Home');
 
 const WEB_SEARCH_STORAGE_KEY = 'webSearchEnabled';
 const LANGUAGE_STORAGE_KEY = 'generationLanguage';
+const VIEWPORT_PRESET_STORAGE_KEY = 'generationViewportPreset';
 const RECENT_OPEN_STORAGE_KEY = 'recentClassroomsOpen';
 
 interface FormState {
   pdfFile: File | null;
   requirement: string;
   language: 'zh-CN' | 'en-US';
+  viewportPreset: ViewportPreset;
   webSearch: boolean;
 }
 
@@ -66,6 +74,7 @@ const initialFormState: FormState = {
   pdfFile: null,
   requirement: '',
   language: 'zh-CN',
+  viewportPreset: DEFAULT_VIEWPORT_PRESET,
   webSearch: false,
 };
 
@@ -101,6 +110,7 @@ function HomePage() {
     try {
       const savedWebSearch = localStorage.getItem(WEB_SEARCH_STORAGE_KEY);
       const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+      const savedViewportPreset = localStorage.getItem(VIEWPORT_PRESET_STORAGE_KEY);
       const updates: Partial<FormState> = {};
       if (savedWebSearch === 'true') updates.webSearch = true;
       if (savedLanguage === 'zh-CN' || savedLanguage === 'en-US') {
@@ -108,6 +118,9 @@ function HomePage() {
       } else {
         const detected = navigator.language?.startsWith('zh') ? 'zh-CN' : 'en-US';
         updates.language = detected;
+      }
+      if (savedViewportPreset && VIEWPORT_OPTIONS.some((option) => option.id === savedViewportPreset)) {
+        updates.viewportPreset = savedViewportPreset as ViewportPreset;
       }
       if (Object.keys(updates).length > 0) {
         setForm((prev) => ({ ...prev, ...updates }));
@@ -196,6 +209,9 @@ function HomePage() {
     try {
       if (field === 'webSearch') localStorage.setItem(WEB_SEARCH_STORAGE_KEY, String(value));
       if (field === 'language') localStorage.setItem(LANGUAGE_STORAGE_KEY, String(value));
+      if (field === 'viewportPreset') {
+        localStorage.setItem(VIEWPORT_PRESET_STORAGE_KEY, String(value));
+      }
       if (field === 'requirement') updateRequirementCache(value as string);
     } catch {
       /* ignore */
@@ -256,6 +272,7 @@ function HomePage() {
       const requirements: UserRequirements = {
         requirement: form.requirement,
         language: form.language,
+        viewportPreset: form.viewportPreset,
         userNickname: userProfile.nickname || undefined,
         userBio: userProfile.bio || undefined,
         webSearch: form.webSearch || undefined,
@@ -552,6 +569,8 @@ function HomePage() {
                 <GenerationToolbar
                   language={form.language}
                   onLanguageChange={(lang) => updateForm('language', lang)}
+                  viewportPreset={form.viewportPreset}
+                  onViewportPresetChange={(preset) => updateForm('viewportPreset', preset)}
                   webSearch={form.webSearch}
                   onWebSearchChange={(v) => updateForm('webSearch', v)}
                   onSettingsOpen={(section) => {
@@ -1049,14 +1068,17 @@ function ClassroomCard({
       {/* Thumbnail — large radius, no border, subtle bg */}
       <div
         ref={thumbRef}
-        className="relative w-full aspect-[16/9] rounded-2xl bg-slate-100 dark:bg-slate-800/80 overflow-hidden transition-transform duration-200 group-hover:scale-[1.02]"
+        className="relative w-full rounded-2xl bg-slate-100 dark:bg-slate-800/80 overflow-hidden transition-transform duration-200 group-hover:scale-[1.02]"
+        style={{
+          aspectRatio: getAspectRatioCssValueByRatio(slide?.viewportRatio ?? 9 / 16),
+        }}
       >
         {slide && thumbWidth > 0 ? (
           <ThumbnailSlide
             slide={slide}
             size={thumbWidth}
             viewportSize={slide.viewportSize ?? 1000}
-            viewportRatio={slide.viewportRatio ?? 0.5625}
+            viewportRatio={slide.viewportRatio ?? 9 / 16}
           />
         ) : !slide ? (
           <div className="absolute inset-0 flex items-center justify-center">

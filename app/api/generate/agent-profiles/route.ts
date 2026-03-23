@@ -11,6 +11,7 @@ import { callLLM } from '@/lib/ai/llm';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
 
 const log = createLogger('Agent Profiles API');
 
@@ -161,12 +162,17 @@ Return a JSON object with this exact structure:
     }
 
     // ── Build output with IDs ──
+    const normalizedAvailableAvatars = availableAvatars.map((avatar) => normalizeAgentAvatar(avatar));
+
     const agents = parsed.agents.map((agent, index) => ({
       id: `gen-${nanoid(8)}`,
       name: agent.name,
       role: agent.role,
       persona: agent.persona,
-      avatar: agent.avatar || availableAvatars[index % availableAvatars.length],
+      avatar: normalizeAgentAvatar(agent.avatar, {
+        role: agent.role,
+        fallback: normalizedAvailableAvatars[index % normalizedAvailableAvatars.length],
+      }),
       color: agent.color || COLOR_PALETTE[index % COLOR_PALETTE.length],
       priority:
         agent.priority ?? (agent.role === 'teacher' ? 10 : agent.role === 'assistant' ? 7 : 5),

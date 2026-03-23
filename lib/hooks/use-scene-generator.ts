@@ -10,6 +10,7 @@ import type { AgentInfo } from '@/lib/generation/generation-pipeline';
 import type { Scene } from '@/lib/types/stage';
 import type { Action, SpeechAction } from '@/lib/types/action';
 import type { TTSProviderId } from '@/lib/audio/types';
+import type { ViewportPreset } from '@/lib/config/viewport';
 import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { createLogger } from '@/lib/logger';
@@ -72,6 +73,9 @@ async function fetchSceneContent(
       description?: string;
       language?: string;
       style?: string;
+      viewportPreset?: ViewportPreset;
+      viewportSize?: number;
+      viewportRatio?: number;
     };
     agents?: AgentInfo[];
   },
@@ -99,6 +103,11 @@ async function fetchSceneActions(
     allOutlines: SceneOutline[];
     content: unknown;
     stageId: string;
+    stageInfo?: {
+      viewportPreset?: ViewportPreset;
+      viewportSize?: number;
+      viewportRatio?: number;
+    };
     agents?: AgentInfo[];
     previousSpeeches?: string[];
     userProfile?: string;
@@ -224,6 +233,9 @@ export interface GenerationParams {
     description?: string;
     language?: string;
     style?: string;
+    viewportPreset?: ViewportPreset;
+    viewportSize?: number;
+    viewportRatio?: number;
   };
   agents?: AgentInfo[];
   userProfile?: string;
@@ -350,6 +362,7 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
               allOutlines: outlines,
               content: contentResult.content,
               stageId: stage.id,
+              stageInfo: params.stageInfo,
               agents: params.agents,
               previousSpeeches,
               userProfile: params.userProfile,
@@ -493,6 +506,7 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
             allOutlines: state.outlines,
             content: contentResult.content,
             stageId: state.stage.id,
+            stageInfo: params.stageInfo,
             agents: params.agents,
             previousSpeeches,
             userProfile: params.userProfile,

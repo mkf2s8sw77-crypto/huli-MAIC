@@ -11,6 +11,7 @@ import { db } from './database';
 import { saveChatSessions, loadChatSessions, deleteChatSessions } from './chat-storage';
 import { clearPlaybackState } from './playback-storage';
 import { createLogger } from '@/lib/logger';
+import { DEFAULT_VIEWPORT_PRESET, getViewportOption } from '@/lib/config/viewport';
 
 const log = createLogger('StageStorage');
 
@@ -46,6 +47,9 @@ export async function saveStageData(stageId: string, data: StageStoreData): Prom
       updatedAt: now,
       language: data.stage.language,
       style: data.stage.style,
+      viewportPreset: data.stage.viewportPreset,
+      viewportSize: data.stage.viewportSize,
+      viewportRatio: data.stage.viewportRatio,
       currentSceneId: data.currentSceneId || undefined,
     });
 
@@ -98,7 +102,10 @@ export async function loadStageData(stageId: string): Promise<StageStoreData | n
     log.info(`Loaded stage: ${stageId}, scenes: ${scenes.length}, chats: ${chats.length}`);
 
     return {
-      stage,
+      stage: {
+        ...stage,
+        viewportPreset: getViewportOption(stage.viewportPreset || DEFAULT_VIEWPORT_PRESET).id,
+      },
       scenes,
       currentSceneId: stage.currentSceneId || scenes[0]?.id || null,
       chats,

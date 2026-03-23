@@ -2,6 +2,7 @@
 import type { Slide } from '@/lib/types/slides';
 import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
+import type { ViewportPreset } from '@/lib/config/viewport';
 
 export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
 
@@ -21,6 +22,9 @@ export interface Stage {
   // Stage metadata
   language?: string;
   style?: string;
+  viewportPreset?: ViewportPreset;
+  viewportSize?: number;
+  viewportRatio?: number;
   // Whiteboard data
   whiteboard?: Whiteboard[];
 }

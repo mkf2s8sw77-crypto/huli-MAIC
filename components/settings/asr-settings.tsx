@@ -11,6 +11,7 @@ import type { ASRProviderId } from '@/lib/audio/types';
 import { Mic, MicOff, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
+import { MEDIA_SETTINGS_LOCKED } from '@/lib/config/media-settings';
 
 const log = createLogger('ASRSettings');
 
@@ -27,6 +28,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
 
   const asrProvider = ASR_PROVIDERS[selectedProviderId] ?? ASR_PROVIDERS['openai-whisper'];
   const isServerConfigured = !!asrProvidersConfig[selectedProviderId]?.isServerConfigured;
+  const isReadOnly = MEDIA_SETTINGS_LOCKED;
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -152,7 +154,6 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
           {t('settings.serverConfiguredNotice')}
         </div>
       )}
-
       {/* API Key & Base URL */}
       {(asrProvider.requiresApiKey || isServerConfigured) && (
         <>
@@ -171,6 +172,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
                     isServerConfigured ? t('settings.optionalOverride') : t('settings.enterApiKey')
                   }
                   value={asrProvidersConfig[selectedProviderId]?.apiKey || ''}
+                  disabled={isReadOnly}
                   onChange={(e) =>
                     setASRProviderConfig(selectedProviderId, {
                       apiKey: e.target.value,
@@ -180,6 +182,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
                 />
                 <button
                   type="button"
+                  disabled={isReadOnly}
                   onClick={() => setShowApiKey(!showApiKey)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
@@ -197,6 +200,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
                 spellCheck={false}
                 placeholder={asrProvider.defaultBaseUrl || t('settings.enterCustomBaseUrl')}
                 value={asrProvidersConfig[selectedProviderId]?.baseUrl || ''}
+                disabled={isReadOnly}
                 onChange={(e) =>
                   setASRProviderConfig(selectedProviderId, {
                     baseUrl: e.target.value,
@@ -243,6 +247,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
           <Button
             onClick={handleToggleASRRecording}
             disabled={
+              isReadOnly ||
               asrProvider.requiresApiKey &&
               !asrProvidersConfig[selectedProviderId]?.apiKey?.trim() &&
               !isServerConfigured

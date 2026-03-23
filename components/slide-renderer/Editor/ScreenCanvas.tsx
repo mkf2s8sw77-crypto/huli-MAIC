@@ -17,6 +17,7 @@ import { AnimatePresence } from 'motion/react';
 
 export function ScreenCanvas() {
   const canvasScale = useCanvasStore.use.canvasScale();
+  const viewportRatio = useCanvasStore.use.viewportRatio();
   const elements = useSceneSelector<SlideContent, PPTElement[]>(
     (content) => content.canvas.elements,
   );
@@ -44,8 +45,10 @@ export function ScreenCanvas() {
     return findElementGeometry(
       { type: 'slide', content: { canvas: { elements } } } as Record<string, unknown>,
       laserElementId,
+      undefined,
+      viewportRatio,
     );
-  }, [laserElementId, elements]);
+  }, [laserElementId, elements, viewportRatio]);
 
   // Compute zoom target geometry
   const zoomGeometry = useMemo<PercentageGeometry | null>(() => {
@@ -55,8 +58,10 @@ export function ScreenCanvas() {
     return findElementGeometry(
       { type: 'slide', content: { canvas: { elements } } } as Record<string, unknown>,
       zoomTarget.elementId,
+      undefined,
+      viewportRatio,
     );
-  }, [zoomTarget, elements]);
+  }, [zoomTarget, elements, viewportRatio]);
 
   return (
     <div className="relative h-full w-full overflow-hidden select-none" ref={canvasRef}>

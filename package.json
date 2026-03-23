@@ -92,6 +92,7 @@
     "undici": "^7.22.0",
     "unpdf": "^1.4.0",
     "use-stick-to-bottom": "^1.1.1",
+    "ws": "^8.18.0",
     "zod": "^4.3.5",
     "zustand": "^5.0.10"
   },
@@ -106,6 +107,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/tinycolor2": "^1.4.6",
+    "@types/ws": "^8.18.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.2",
     "prettier": "3.8.1",

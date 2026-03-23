@@ -9,6 +9,7 @@ import type { Whiteboard } from '@/lib/types/stage';
 import type { PPTElement } from '@/lib/types/slides';
 import type { StageStore, APIResult } from './stage-api-types';
 import { generateId } from './stage-api-defaults';
+import { DEFAULT_VIEWPORT_SIZE, getViewportRatio } from '@/lib/config/viewport';
 
 /**
  * Create the whiteboard management API
@@ -28,8 +29,8 @@ export function createWhiteboardAPI(store: StageStore) {
         const state = store.getState();
         const whiteboard: Whiteboard = {
           id: generateId('whiteboard'),
-          viewportSize: 1000,
-          viewportRatio: 16 / 9,
+          viewportSize: state.stage?.viewportSize || DEFAULT_VIEWPORT_SIZE,
+          viewportRatio: state.stage?.viewportRatio || getViewportRatio(state.stage?.viewportPreset),
           elements: [],
           background: {
             type: 'solid',

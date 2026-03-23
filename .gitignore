@@ -65,3 +65,6 @@ next-env.d.ts
 
 # docs
 /docs
+
+# local secrets
+minimax-key.txt

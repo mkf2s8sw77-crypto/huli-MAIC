@@ -221,6 +221,7 @@ export const settingsZhCN = {
     providerAzureTTS: 'Azure TTS',
     providerGLMTTS: 'GLM TTS',
     providerQwenTTS: 'Qwen TTS（阿里云百炼）',
+    providerMiniMaxTTS: 'MiniMax TTS',
     providerBrowserNativeTTS: '浏览器原生 TTS',
     providerOpenAIWhisper: 'OpenAI ASR (gpt-4o-mini-transcribe)',
     providerBrowserNative: '浏览器原生 ASR',
@@ -480,6 +481,7 @@ export const settingsZhCN = {
     providerSeedream: 'Seedream（字节豆包）',
     providerQwenImage: 'Qwen Image（阿里通义）',
     providerNanoBanana: 'Nano Banana（Gemini）',
+    providerMiniMaxImage: 'MiniMax 图片生成',
     testImageGeneration: '测试图像生成',
     testImageConnectivity: '测试连接',
     imageConnectivitySuccess: '图像服务连接成功',
@@ -524,6 +526,7 @@ export const settingsZhCN = {
     serverConfigured: '服务端',
     serverConfiguredNotice:
       '管理员已在服务端配置了此提供方的 API Key，可直接使用。也可输入自己的 Key 覆盖。',
+    readOnlyManagedByAdmin: '当前媒体配置由管理员统一管理，前端仅展示不可修改。',
     optionalOverride: '可选，留空则使用服务端配置',
     // Access code
     setupNeeded: '请先完成配置',
@@ -806,6 +809,7 @@ export const settingsEnUS = {
     providerAzureTTS: 'Azure TTS',
     providerGLMTTS: 'GLM TTS',
     providerQwenTTS: 'Qwen TTS (Alibaba Cloud Bailian)',
+    providerMiniMaxTTS: 'MiniMax TTS',
     providerBrowserNativeTTS: 'Browser Native TTS',
     providerOpenAIWhisper: 'OpenAI ASR (gpt-4o-mini-transcribe)',
     providerBrowserNative: 'Browser Native ASR',
@@ -1068,6 +1072,7 @@ export const settingsEnUS = {
     providerSeedream: 'Seedream (ByteDance)',
     providerQwenImage: 'Qwen Image (Alibaba)',
     providerNanoBanana: 'Nano Banana (Gemini)',
+    providerMiniMaxImage: 'MiniMax Image',
     testImageGeneration: 'Test Image Generation',
     testImageConnectivity: 'Test Connection',
     imageConnectivitySuccess: 'Image service connected successfully',
@@ -1113,6 +1118,8 @@ export const settingsEnUS = {
     serverConfigured: 'Server',
     serverConfiguredNotice:
       'Admin has configured an API key for this provider on the server. You can use it directly or enter your own key to override.',
+    readOnlyManagedByAdmin:
+      'Media settings are managed by the administrator and are read-only in the UI.',
     optionalOverride: 'Optional — leave empty to use server config',
     // Access code
     setupNeeded: 'Setup required',

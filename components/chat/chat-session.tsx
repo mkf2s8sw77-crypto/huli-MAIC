@@ -10,6 +10,7 @@ import { CircleStop } from 'lucide-react';
 import { InlineActionTag } from './inline-action-tag';
 import { useUserProfileStore } from '@/lib/store/user-profile';
 import { withBasePath } from '@/lib/utils/base-path';
+import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
 
 /** Extended message part type covering standard + custom action parts */
 interface MessagePart {
@@ -39,7 +40,7 @@ function AvatarDisplay({ src, alt, className }: { src: string; alt?: string; cla
   if (isUrl) {
     return (
       <img
-        src={withBasePath(src)}
+        src={withBasePath(normalizeAgentAvatar(src))}
         alt={alt || ''}
         className={cn('w-full h-full object-cover', className)}
       />

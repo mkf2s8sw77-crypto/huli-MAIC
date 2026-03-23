@@ -14,11 +14,12 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThumbnailSlide } from '@/components/slide-renderer/components/ThumbnailSlide';
-import { useStageStore, useCanvasStore } from '@/lib/store';
+import { useStageStore } from '@/lib/store';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import type { SceneType, SlideContent } from '@/lib/types/stage';
 import { PENDING_SCENE_ID } from '@/lib/store/stage';
 import { withBasePath } from '@/lib/utils/base-path';
+import { getAspectRatioCssValueByRatio, getViewportRatio } from '@/lib/config/viewport';
 
 interface SceneSidebarProps {
   readonly collapsed: boolean;
@@ -41,9 +42,8 @@ export function SceneSidebar({
   const router = useRouter();
   const { scenes, currentSceneId, setCurrentSceneId, generatingOutlines, generationStatus } =
     useStageStore();
+  const stage = useStageStore.use.stage();
   const failedOutlines = useStageStore.use.failedOutlines();
-  const viewportSize = useCanvasStore.use.viewportSize();
-  const viewportRatio = useCanvasStore.use.viewportRatio();
 
   const [retryingOutlineId, setRetryingOutlineId] = useState<string | null>(null);
 
@@ -158,6 +158,10 @@ export function SceneSidebar({
             const Icon = getSceneTypeIcon(scene.type);
             const isSlide = scene.type === 'slide';
             const slideContent = isSlide ? (scene.content as SlideContent) : null;
+            const thumbnailRatio =
+              slideContent?.canvas.viewportRatio ||
+              stage?.viewportRatio ||
+              getViewportRatio(stage?.viewportPreset);
 
             return (
               <div
@@ -203,13 +207,16 @@ export function SceneSidebar({
                 </div>
 
                 {/* Thumbnail */}
-                <div className="relative aspect-video w-full rounded overflow-hidden bg-gray-100 dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/5">
+                <div
+                  className="relative w-full rounded overflow-hidden bg-gray-100 dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/5"
+                  style={{ aspectRatio: getAspectRatioCssValueByRatio(thumbnailRatio) }}
+                >
                   <div className="absolute inset-0 flex items-center justify-center">
                     {isSlide && slideContent ? (
                       <ThumbnailSlide
                         slide={slideContent.canvas}
-                        viewportSize={viewportSize}
-                        viewportRatio={viewportRatio}
+                        viewportSize={slideContent.canvas.viewportSize ?? 1000}
+                        viewportRatio={slideContent.canvas.viewportRatio ?? 9 / 16}
                         size={Math.max(100, sidebarWidth - 28)}
                       />
                     ) : scene.type === 'quiz' ? (

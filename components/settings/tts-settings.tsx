@@ -12,6 +12,7 @@ import { Volume2, Loader2, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-rea
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/lib/logger';
 import { useTTSPreview } from '@/lib/audio/use-tts-preview';
+import { MEDIA_SETTINGS_LOCKED } from '@/lib/config/media-settings';
 
 const log = createLogger('TTSSettings');
 
@@ -37,6 +38,7 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
 
   const ttsProvider = TTS_PROVIDERS[selectedProviderId] ?? TTS_PROVIDERS['openai-tts'];
   const isServerConfigured = !!ttsProvidersConfig[selectedProviderId]?.isServerConfigured;
+  const isReadOnly = MEDIA_SETTINGS_LOCKED;
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [testText, setTestText] = useState(t('settings.ttsTestTextDefault'));
@@ -93,7 +95,6 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
           {t('settings.serverConfiguredNotice')}
         </div>
       )}
-
       {/* API Key & Base URL */}
       {(ttsProvider.requiresApiKey || isServerConfigured) && (
         <>
@@ -112,6 +113,7 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
                     isServerConfigured ? t('settings.optionalOverride') : t('settings.enterApiKey')
                   }
                   value={ttsProvidersConfig[selectedProviderId]?.apiKey || ''}
+                  disabled={isReadOnly}
                   onChange={(e) =>
                     setTTSProviderConfig(selectedProviderId, {
                       apiKey: e.target.value,
@@ -121,6 +123,7 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
                 />
                 <button
                   type="button"
+                  disabled={isReadOnly}
                   onClick={() => setShowApiKey(!showApiKey)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
@@ -138,6 +141,7 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
                 spellCheck={false}
                 placeholder={ttsProvider.defaultBaseUrl || t('settings.enterCustomBaseUrl')}
                 value={ttsProvidersConfig[selectedProviderId]?.baseUrl || ''}
+                disabled={isReadOnly}
                 onChange={(e) =>
                   setTTSProviderConfig(selectedProviderId, {
                     baseUrl: e.target.value,
@@ -182,12 +186,14 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
           <Input
             placeholder={t('settings.ttsTestTextPlaceholder')}
             value={testText}
+            disabled={isReadOnly}
             onChange={(e) => setTestText(e.target.value)}
             className="flex-1"
           />
           <Button
             onClick={handleTestTTS}
             disabled={
+              isReadOnly ||
               testingTTS ||
               !testText.trim() ||
               (ttsProvider.requiresApiKey &&

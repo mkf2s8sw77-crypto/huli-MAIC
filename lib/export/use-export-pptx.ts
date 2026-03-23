@@ -24,6 +24,12 @@ import { type SvgPoints, toPoints, getSvgPathRange } from '@/lib/export/svg-path
 import { svg2Base64 } from '@/lib/export/svg2base64';
 import { latexToOmml } from '@/lib/export/latex-to-omml';
 import { createLogger } from '@/lib/logger';
+import {
+  DEFAULT_VIEWPORT_PRESET,
+  getViewportOption,
+  getViewportPresetByRatio,
+  type ViewportPreset,
+} from '@/lib/config/viewport';
 
 const log = createLogger('ExportPPTX');
 
@@ -362,17 +368,25 @@ function buildSpeakerNotes(scene: Scene): string {
 async function buildPptxBlob(
   slides: Slide[],
   slideScenes: Scene[],
+  viewportPreset: ViewportPreset,
   viewportRatio: number,
   viewportSize: number,
   ratioPx2Inch: number,
   ratioPx2Pt: number,
 ): Promise<Blob> {
   const pptx = new pptxgen();
+  const viewportOption = getViewportOption(viewportPreset || getViewportPresetByRatio(viewportRatio));
 
-  // Set layout based on aspect ratio
-  if (viewportRatio === 0.625) pptx.layout = 'LAYOUT_16x10';
-  else if (viewportRatio === 0.75) pptx.layout = 'LAYOUT_4x3';
-  else pptx.layout = 'LAYOUT_16x9';
+  if (viewportOption.pptxLayout.kind === 'builtin') {
+    pptx.layout = viewportOption.pptxLayout.name;
+  } else {
+    pptx.defineLayout({
+      name: viewportOption.pptxLayout.name,
+      width: viewportOption.pptxLayout.width,
+      height: viewportOption.pptxLayout.height,
+    });
+    pptx.layout = viewportOption.pptxLayout.name;
+  }
 
   for (let slideIdx = 0; slideIdx < slides.length; slideIdx++) {
     const slide = slides[slideIdx];
@@ -1075,12 +1089,18 @@ export function useExportPPTX() {
   const stage = useStageStore((s) => s.stage);
   const viewportSize = useCanvasStore.use.viewportSize();
   const viewportRatio = useCanvasStore.use.viewportRatio();
-
-  const ratioPx2Inch = 96 * (viewportSize / 960);
-  const ratioPx2Pt = (96 / 72) * (viewportSize / 960);
-
   const slideScenes = scenes.filter((s) => s.content.type === 'slide');
   const slides = slideScenes.map((s) => (s.content as SlideContent).canvas);
+  const exportViewportPreset =
+    stage?.viewportPreset ||
+    (slides[0]?.viewportRatio
+      ? getViewportPresetByRatio(slides[0].viewportRatio)
+      : DEFAULT_VIEWPORT_PRESET);
+  const exportViewportSize = slides[0]?.viewportSize || stage?.viewportSize || viewportSize;
+  const exportViewportRatio = slides[0]?.viewportRatio || stage?.viewportRatio || viewportRatio;
+
+  const ratioPx2Inch = 96 * (exportViewportSize / 960);
+  const ratioPx2Pt = (96 / 72) * (exportViewportSize / 960);
 
   // Shared guard + state wrapper for export actions
   const withExportGuard = useCallback(
@@ -1110,8 +1130,9 @@ export function useExportPPTX() {
       const blob = await buildPptxBlob(
         slides,
         slideScenes,
-        viewportRatio,
-        viewportSize,
+        exportViewportPreset,
+        exportViewportRatio,
+        exportViewportSize,
         ratioPx2Inch,
         ratioPx2Pt,
       );
@@ -1123,8 +1144,9 @@ export function useExportPPTX() {
     slides,
     slideScenes,
     stage,
-    viewportSize,
-    viewportRatio,
+    exportViewportPreset,
+    exportViewportSize,
+    exportViewportRatio,
     ratioPx2Inch,
     ratioPx2Pt,
     t,
@@ -1141,8 +1163,9 @@ export function useExportPPTX() {
       const pptxBlob = await buildPptxBlob(
         slides,
         slideScenes,
-        viewportRatio,
-        viewportSize,
+        exportViewportPreset,
+        exportViewportRatio,
+        exportViewportSize,
         ratioPx2Inch,
         ratioPx2Pt,
       );
@@ -1170,8 +1193,9 @@ export function useExportPPTX() {
     slideScenes,
     scenes,
     stage,
-    viewportSize,
-    viewportRatio,
+    exportViewportPreset,
+    exportViewportSize,
+    exportViewportRatio,
     ratioPx2Inch,
     ratioPx2Pt,
     t,

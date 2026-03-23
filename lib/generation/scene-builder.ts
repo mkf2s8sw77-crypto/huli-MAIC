@@ -21,6 +21,12 @@ import { applyOutlineFallbacks } from './outline-generator';
 import { generateSceneContent, generateSceneActions } from './scene-generator';
 import type { AgentInfo, SceneGenerationContext, AICallFn } from './pipeline-types';
 import { createLogger } from '@/lib/logger';
+import {
+  DEFAULT_VIEWPORT_PRESET,
+  DEFAULT_VIEWPORT_SIZE,
+  getViewportRatio,
+  type ViewportPreset,
+} from '@/lib/config/viewport';
 const log = createLogger('Generation');
 
 /**
@@ -76,6 +82,7 @@ export async function buildSceneFromOutline(
   agents?: AgentInfo[],
   onPhaseChange?: (phase: 'content' | 'actions') => void,
   userProfile?: string,
+  viewport?: { viewportPreset?: ViewportPreset; viewportSize?: number; viewportRatio?: number },
 ): Promise<Scene | null> {
   // Apply type fallbacks
   outline = applyOutlineFallbacks(outline, !!languageModel);
@@ -100,6 +107,7 @@ export async function buildSceneFromOutline(
     visionEnabled,
     undefined,
     agents,
+    viewport,
   );
   if (!content) {
     log.error(`Failed to generate content for: ${outline.title}`);
@@ -113,7 +121,7 @@ export async function buildSceneFromOutline(
   log.debug(`Generated ${actions.length} actions for: ${outline.title}`);
 
   // Build complete Scene object
-  return buildCompleteScene(outline, content, actions, stageId);
+  return buildCompleteScene(outline, content, actions, stageId, viewport);
 }
 
 /**
@@ -128,8 +136,12 @@ export function buildCompleteScene(
     | GeneratedPBLContent,
   actions: Action[],
   stageId: string,
+  viewport?: { viewportPreset?: ViewportPreset; viewportSize?: number; viewportRatio?: number },
 ): Scene | null {
   const sceneId = nanoid();
+  const viewportPreset = viewport?.viewportPreset || DEFAULT_VIEWPORT_PRESET;
+  const viewportSize = viewport?.viewportSize || DEFAULT_VIEWPORT_SIZE;
+  const viewportRatio = viewport?.viewportRatio || getViewportRatio(viewportPreset);
 
   if (outline.type === 'slide' && 'elements' in content) {
     // Build Slide object
@@ -144,8 +156,8 @@ export function buildCompleteScene(
 
     const slide: Slide = {
       id: nanoid(),
-      viewportSize: 1000,
-      viewportRatio: 0.5625,
+      viewportSize,
+      viewportRatio,
       theme: defaultTheme,
       elements: content.elements,
       background: content.background,

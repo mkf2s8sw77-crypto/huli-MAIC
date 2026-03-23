@@ -28,7 +28,12 @@ import { AgentRevealModal } from '@/components/agent/agent-reveal-modal';
 import { createLogger } from '@/lib/logger';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
-import { withBasePath } from '@/lib/utils/base-path';
+import { GENERATED_AGENT_AVATARS } from '@/lib/utils/agent-avatar';
+import {
+  DEFAULT_VIEWPORT_SIZE,
+  getViewportRatio,
+  type ViewportPreset,
+} from '@/lib/config/viewport';
 
 const log = createLogger('GenerationPreview');
 
@@ -364,12 +369,16 @@ function GenerationPreviewContent() {
 
       // Create stage client-side (needed for agent generation stageId)
       const stageId = nanoid(10);
+      const viewportPreset = currentSession.requirements.viewportPreset || ('3:4' as ViewportPreset);
       const stage: Stage = {
         id: stageId,
         name: extractTopicFromRequirement(currentSession.requirements.requirement),
         description: '',
         language: currentSession.requirements.language || 'zh-CN',
         style: 'professional',
+        viewportPreset,
+        viewportSize: DEFAULT_VIEWPORT_SIZE,
+        viewportRatio: getViewportRatio(viewportPreset),
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -379,20 +388,7 @@ function GenerationPreviewContent() {
         if (agentStepIdx >= 0) setCurrentStepIndex(agentStepIdx);
 
         try {
-          const allAvatars = [
-            withBasePath('/avatars/assist.png'),
-            withBasePath('/avatars/assist-2.png'),
-            withBasePath('/avatars/clown.png'),
-            withBasePath('/avatars/clown-2.png'),
-            withBasePath('/avatars/curious.png'),
-            withBasePath('/avatars/curious-2.png'),
-            withBasePath('/avatars/note-taker.png'),
-            withBasePath('/avatars/note-taker-2.png'),
-            withBasePath('/avatars/teacher.png'),
-            withBasePath('/avatars/teacher-2.png'),
-            withBasePath('/avatars/thinker.png'),
-            withBasePath('/avatars/thinker-2.png'),
-          ];
+          const allAvatars = [...GENERATED_AGENT_AVATARS];
 
           // No outlines yet — agent generation uses only stage name + description
           const agentResp = await fetch('/api/generate/agent-profiles', {
@@ -581,6 +577,9 @@ function GenerationPreviewContent() {
         description: stage.description,
         language: stage.language,
         style: stage.style,
+        viewportPreset: stage.viewportPreset,
+        viewportSize: stage.viewportSize,
+        viewportRatio: stage.viewportRatio,
       };
 
       const userProfile =
@@ -631,6 +630,7 @@ function GenerationPreviewContent() {
           allOutlines: outlines,
           content: contentData.content,
           stageId: stage.id,
+          stageInfo,
           agents,
           previousSpeeches: [],
           userProfile,

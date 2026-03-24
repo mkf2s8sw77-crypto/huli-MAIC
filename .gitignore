@@ -65,6 +65,7 @@ next-env.d.ts
 
 # docs
 /docs
+/promptDocs
 
 # local secrets
 minimax-key.txt

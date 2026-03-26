@@ -160,13 +160,79 @@ LLM、Image、TTS、ASR、PDF、Web Search 都属于应用编排的多 provider 
 
 ### 5.3 比例是课程级能力
 
-`16:9 / 4:3 / 3:4 / 9:16` 这类比例不是导出按钮的小选项，而是课程级配置。  
+`16:9 / 4:3 / 3:4 / 9:16` 这类比例不是导出按钮的小选项，而是课程级配置。
 修改比例能力时必须同时考虑：
 
 - 生成
 - 课堂显示
 - 缩略图
 - 导出
+
+竖版（3:4 / 9:16）下，slide 内容生成已通过 `canvas_orientation` + `orientation_design_rules` 变量向 prompt 注入方向感知规则（禁止三栏、强制纵向堆叠、要求内容覆盖 80% 画布高度）。相关实现在：
+- `lib/generation/scene-generator.ts` → `buildSlideOrientationRules()`
+- `lib/generation/prompts/templates/slide-content/system.md` → Orientation-Aware Design Rules 节
+
+竖版版式质量专项优化（Phase 6）已完成：
+- 在 `buildSlideOrientationRules()` 中增加三个新节：
+  1. **Portrait Page Archetypes**：6 种页面原型（封面/概念/对比/步骤/提示/总结），要求模型选一个原型后按其结构生成
+  2. **Portrait Visual Hierarchy**：强制要求标题栏使用彩色 ShapeElement 作为视觉锚点、身体文字左对齐、一个主导卡片、禁止"全居中堆叠"反模式
+  3. **Portrait Media Strategy**：明确三种媒体结构角色（主视觉/步骤配图/概念图），以及何时应省略图片
+- 横版分支完全未改动
+
+竖版专用字号体系（手机可读性，Phase 4）已在 `buildSlideOrientationRules()` 中实现：
+- 原理：画布宽 1000px，手机约 390px，缩放比 ~0.35×，18-20px 字体渲染为 ~7px（不可读）
+- 竖版字号规则：主标题 64-72px、分区标题 48-56px、正文 44-52px、标签 36-40px、图注 32-36px
+- 竖版密度规则：正文块 ≤ 3 行、整页 ≤ 5 条要点、标题 ≤ 12 中文字
+- 横版课程：字号规则不变，仅竖版分支生效
+- Height Lookup Table 已扩展至 72px（`system.md` 中）
+
+竖版版式质检 + 可读性质检 + 视觉层级质检 + 自动返修（Phase 3 + Phase 5 + Phase 6）已在 `generateSlideContent` 末端实现，仅对 isPortrait 激活：
+- 实现：`lib/generation/portrait-layout-linter.ts` → `lintPortraitLayout()` + `repairPortraitLayout()`
+- 版式检测规则：`low-coverage`（底部 < 60% 高度）、`upper-heavy`（上半区面积 > 78%）、`three-column`（同行 3+ 窄元素）
+- 可读性检测规则（Phase 5）：
+  - `small-font-size`：正文区（top > 150px）字号 < 44px；任意位置字号 < 32px（绝对最低）
+  - `dense-text-block`：文本块含 3+ 个 `<p>` 且高度 < 段落数 × 55px，推测溢出/拥挤
+- 视觉层级检测规则（Phase 6）：
+  - `flat-hierarchy`：正文区（top ≥ 200px）≥ 3 个文本块居中对齐 + 无彩色标题栏 ShapeElement — "居中堆叠"反模式
+- 返修链路：
+  - 版式违规：只调整 left/top/width/height
+  - 可读性违规：额外允许修改 content HTML 中的 font-size px 值
+  - 层级违规（flat-hierarchy）：额外允许修改 content HTML 中的 text-align（center→left）
+  - 最多 MAX_REPAIR_ATTEMPTS=2 次，超限兜底
+- 横版课程完全不进入此链路
+
+竖版模板排版引擎（Phase 7）已完成，取代"AI 自由排版坐标"路径：
+- 新文件：
+  - `lib/generation/portrait-content-schema.ts` → PortraitContentManifest 类型 + 校验
+  - `lib/generation/portrait-manifest-prompt.ts` → AI 提取 manifest 的 prompt 构建函数
+  - `lib/generation/portrait-template-engine.ts` → manifest → elements 渲染引擎 + 文本 fitting
+- 修改文件：
+  - `lib/generation/portrait-layout-linter.ts` → 新增 hero-too-small / lower-half-empty / archetype-incomplete 3 条规则
+  - `lib/generation/scene-generator.ts` → 新增 generatePortraitSlide() + portrait 分流（Phase 7 分支在旧 aiCall 之前，节省 AI 调用）
+- AI 决定：archetype 选型、标题文字、hero/card 内容、图片角色
+- 程序决定：所有坐标、块高度（文本 fitting）、堆叠节奏
+- 失败降级：manifest 解析失败时自动回退旧路径，不影响生成流程
+- 横版完全不受影响（分流在 isPortrait 分支内）
+
+竖版大纲生成（scene outline 阶段）已通过 `outline_orientation_rules` 变量实现拆页差异化，相关实现：
+- `lib/generation/outline-generator.ts` → `buildOutlineOrientationRules()`（已导出）
+- `lib/generation/prompts/templates/requirements-to-outlines/system.md` → Orientation-Aware Outline Design 节
+- `app/api/generate/scene-outlines-stream/route.ts` → buildPrompt 调用注入 outline_orientation_rules
+- 竖版规则：1-2 keyPoints/scene、每分钟 1.5-2.5 场景、禁止并列总览、比较内容拆成逐页展开
+- 横版规则：3-5 keyPoints/scene、每分钟 1-2 场景、保持原有紧凑度
+
+竖版内容 manifest 已通过 `lib/generation/portrait-content-schema.ts` 标准化定义：
+- `PortraitArchetype`：6 种页面原型（lead/concept/compare/steps/tip/summary）
+- `PortraitContentManifest`：顶层结构，包含标题、主卡片、最多 3 张支撑卡片、图片角色、主题色
+- `isValidManifest()`：宽松校验函数，只检查必要字段，允许 AI 产出不完美的结果
+- 这是 AI 理解内容、程序排版的中间表示层（MIR）
+
+移动端专注阅读模式已在 `components/stage-shell/mobile-shell.tsx` 实现：
+- 触发条件：仅 playback 模式（hasRoundtable=true）下显示切换按钮
+- 进入后：Header 折叠（CSS transition，DOM 保留）+ Roundtable 不渲染 + Canvas 占满全高
+- 可用面积：390×844 手机竖屏 playback 模式下从 572px 升至 844px（+47.6%）
+- 实现范围：100% 在 MobileShell 内部，无跨文件副作用，DesktopShell 不受影响
+- 注意：专注模式下 Roundtable 不渲染（含播放控制和讨论输入），但 CanvasArea 自有 toolbar 仍可播放/导航/聊天
 
 ### 5.4 头像必须有 fallback
 
@@ -190,6 +256,18 @@ agent 头像不是完全可信输入。
 - `app-deploy` 负责把服务接入本机共享 gateway
 - 公网可达依赖现成 ingress 层
 - 不要为了新增一个 path 服务，再造一套单项目 gateway 结构
+- `dev-huli-gateway-tunnel` 的 PM2 工作目录已迁到 `/Users/huli-dev/.infra/dev-huli-gateway`；旧的 `Documents/_infra` 不再是这条 tunnel 的依赖路径
+- MAIC 当前对子路径的规范化是 `/maic/ -> /maic`；共享 gateway 上 `location = /maic` 必须直接代理 upstream，不能再强制跳回 `/maic/`
+
+### 5.6 当前没有中心化账号体系
+
+当前用户身份是浏览器本地 profile，不是服务端账号系统：
+
+- 用户资料仅包含 `avatar / nickname / bio`，保存在 `localStorage`
+- 课程、聊天、媒体等数据保存在浏览器 `IndexedDB`
+- 当前不存在注册 / 登录 / 组织 / 权限分级 / 多用户隔离表结构
+
+如果后续要接入真实账号体系，必须先明确本地数据迁移与兼容策略，不能默认把当前本地 profile 当成可鉴权账号。
 
 ---
 

@@ -61,8 +61,11 @@ export function isValidManifest(obj: unknown): obj is PortraitContentManifest {
   const validArchetypes: PortraitArchetype[] = [
     'lead', 'concept', 'compare', 'steps', 'tip', 'summary',
   ];
+  const validImageRoles: ImageRole[] = ['hero', 'supporting', 'skip'];
   if (!validArchetypes.includes(m.archetype as PortraitArchetype)) return false;
   if (typeof m.title !== 'string' || m.title.trim() === '') return false;
+  if (typeof m.accentColor !== 'string' || m.accentColor.trim() === '') return false;
+  if (!validImageRoles.includes(m.imageRole as ImageRole)) return false;
   if (!m.heroBlock || typeof (m.heroBlock as Record<string, unknown>).body !== 'string') return false;
   if (!Array.isArray(m.supportingCards)) return false;
   return true;

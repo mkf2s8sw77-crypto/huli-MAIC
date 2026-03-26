@@ -38,7 +38,7 @@ const TITLE_TOP = 50;
 const TITLE_HEIGHT = 148;
 /** 内容区起始 Y 坐标（标题栏底部 + 小间距） */
 const CONTENT_START = 222;
-const HERO_GAP = 20; // 标题栏与 hero 块之间的间距（CONTENT_START - TITLE_TOP - TITLE_HEIGHT）
+const HERO_GAP = 20; // 标题栏与 hero 块之间的间距
 const CARD_GAP = 16; // 卡片之间的间距
 
 const TITLE_FONT = 64;
@@ -350,7 +350,7 @@ function renderLeadWithImage(
   const imgMaxHeight = Math.round(canvasHeight * 0.3);
   const finalImgH = Math.min(imgHeight, imgMaxHeight);
   const finalImgW = Math.round(finalImgH * imageInfo.aspectRatio);
-  const finalImgLeft = x + Math.floor((w - finalImgW) / 2);
+  const finalImgLeft = Math.max(x, x + Math.floor((w - finalImgW) / 2));
 
   const imageElements: SlideElement[] = [
     makeImage(finalImgLeft, imgTop, finalImgW, finalImgH, imageInfo.id),
@@ -452,7 +452,7 @@ function renderStepsBody(
   const targetBottom = Math.round(canvasHeight * 0.84);
   const available = targetBottom - CONTENT_START;
   const expandPer =
-    naturalTotal < available && steps.length + 1 > 0
+    naturalTotal < available
       ? Math.floor((available - naturalTotal) / (steps.length + 1))
       : 0;
 
@@ -534,7 +534,12 @@ export function renderPortraitTemplate(
 
   switch (manifest.archetype) {
     case 'compare':
-      bodyElements = renderCompareBody(manifest, canvasWidth, canvasHeight);
+      if (manifest.supportingCards.length === 0) {
+        // compare 需要对比项，若缺失则降级为 concept 渲染
+        bodyElements = renderGenericBody(manifest, canvasWidth, canvasHeight, '#e8f4fd', CARD_BG_DEFAULT, 200);
+      } else {
+        bodyElements = renderCompareBody(manifest, canvasWidth, canvasHeight);
+      }
       break;
 
     case 'steps':

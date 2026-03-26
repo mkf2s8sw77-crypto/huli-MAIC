@@ -52,6 +52,13 @@ import {
   getViewportRatio,
   type ViewportPreset,
 } from '@/lib/config/viewport';
+import { lintPortraitLayout, repairPortraitLayout } from './portrait-layout-linter';
+import {
+  buildPortraitManifestSystemPrompt,
+  buildPortraitManifestUserPrompt,
+} from './portrait-manifest-prompt';
+import { renderPortraitTemplate, type ImageInfo } from './portrait-template-engine';
+import { isValidManifest, type PortraitContentManifest } from './portrait-content-schema';
 const log = createLogger('Generation');
 
 // ==================== Stage 2: Full Scenes (Two-Step) ====================
@@ -466,6 +473,309 @@ function processLatexElements(
 }
 
 /**
+ * Build orientation-aware design rules for slide generation prompt.
+ * Portrait rules discourage horizontal layouts; landscape rules keep default behavior.
+ */
+function buildSlideOrientationRules(
+  canvasWidth: number,
+  canvasHeight: number,
+  isPortrait: boolean,
+): string {
+  if (isPortrait) {
+    const singleBlockWidth = canvasWidth - 120;
+    const col2Width = Math.floor((canvasWidth - 160) / 2);
+    const contentBottom = Math.round(canvasHeight * 0.8);
+    const zone75 = Math.round(canvasHeight * 0.75);
+    return `### Portrait Canvas Rules (canvas_height ${canvasHeight} > canvas_width ${canvasWidth})
+
+This is a **PORTRAIT** canvas. Apply every rule below WITHOUT EXCEPTION.
+
+**PROHIBITED — never use in portrait:**
+1. **Three-column card layout** — three side-by-side cards or blocks are forbidden. MAX 2 elements per row.
+2. **Wide tables with 4+ columns** — use ≤ 3-column tables or replace with a vertical list.
+3. **Left-right 50/50 split as the default** — use only when explicitly comparing exactly two items.
+4. **All content packed into the top 40% of the canvas with large empty space below** — content must reach at least y=${contentBottom}px from the top.
+5. **Dominant landscape images (aspect ratio > 1.5:1)** — avoid; if unavoidable, constrain width to ≤ ${Math.round(canvasWidth * 0.55)}px and place as an accent, not the main element.
+
+**REQUIRED — always apply in portrait:**
+1. **Vertical stacking**: arrange content blocks top-to-bottom, not side-by-side.
+2. **Single wide main block**: one primary block at width ~${singleBlockWidth}px (left=60, right edge at ${canvasWidth - 60}). Then add secondary blocks *below* it.
+3. **Zone structure**:
+   - Title zone: top=50, height ≈ 128-148px (64-72px font, 1-2 lines)
+   - Main content zone: top ≈ 190-210px → must extend downward to at least y=${contentBottom}px
+   - Bottom zone (optional callout/summary): starts at y≈${zone75}px
+4. **Vertical list for 3+ points**: use a single full-width (${singleBlockWidth}px wide) text block with bullet points — do NOT split into columns.
+5. **Downward-flowing sequences**: for processes or steps, stack step-boxes vertically with down-facing arrows (LineElement pointing downward) between them.
+
+**Layout constraints (hard limits):**
+| Parameter | Value |
+|-----------|-------|
+| Max columns per row | **2** |
+| Single block recommended width | **${singleBlockWidth}px** (left=60) |
+| Two-column block width (each) | **${col2Width}px**, gap 40px |
+| Content must reach at least | **y=${contentBottom}px** from top |
+
+**Portrait Typography — MOBILE-FIRST (mandatory font sizes):**
+
+Portrait slides are viewed on phones at ~0.35× scale (1000px canvas → ~350px screen width).
+Desktop PPT font sizes (18-20px) render as ~7px on phone — completely unreadable. Use the sizes below WITHOUT EXCEPTION.
+
+| Text role | Font size | Phone rendering |
+|-----------|-----------|-----------------|
+| Main slide title | **64-72px** | ≈ 22-25px on phone ✓ |
+| Section heading / card title | **48-56px** | ≈ 17-20px on phone ✓ |
+| Body text / bullet text | **44-52px** | ≈ 15-18px on phone ✓ |
+| Labels, tags, callout text | **36-40px** | ≈ 13-14px on phone ✓ |
+| Captions, image notes | **32-36px** | ≈ 11-13px on phone (use sparingly) |
+
+> ⚠️  NEVER use font sizes below **32px** in portrait slides. Sizes 18-20px are portrait-prohibited.
+
+**Portrait Text Density (hard limits):**
+
+Larger fonts mean fewer characters per line. Enforce these limits to prevent crowding:
+
+| Parameter | Limit |
+|-----------|-------|
+| Lines per body text block | **≤ 3 lines** |
+| \`<p>\` tags per text element | **≤ 4** |
+| Chinese chars per body line | **≤ 16 chars** (at 48px in ${singleBlockWidth}px-wide block) |
+| Latin chars per body line | **≤ 22 chars** |
+| Bullet points per slide total | **≤ 5 items** |
+| Main title length | **≤ 12 Chinese chars / ≤ 16 Latin chars** |
+
+> If content exceeds these limits, **cut content** — do not shrink font size to fit more text.
+
+---
+
+### Portrait Page Archetypes — CHOOSE ONE AND FOLLOW IT STRICTLY
+
+Every portrait slide must match one of these archetypes. Do NOT invent free-form layouts.
+Pick the archetype that best fits the scene's educational goal, then follow its exact structure.
+
+**A1 — Cover / Lead-in (封面/导学页)**
+*Use for: scene openings, topic introductions, chapter starters*
+- Title bar: top=50, height=148, width=${canvasWidth}, LEFT-aligned 64-72px, on a filled colored ShapeElement (behind the text)
+- Hook / intro text: top=230, height≈110, width=${singleBlockWidth}, left=60, 44-48px, left-aligned
+- Main visual image: top=370, width≈${Math.round(singleBlockWidth * 0.9)}, centered, image serves as visual anchor
+- Bottom callout card (optional): top≈${canvasHeight - 220}, height=150, full-width accent card, 40-44px
+
+**A2 — Concept / Definition (概念/定义页)**
+*Use for: introducing a new term, explaining a core idea*
+- Title bar: top=50, height=128, full-width, 64-72px, LEFT-aligned, on colored ShapeElement
+- CORE DEFINITION CARD (dominant element): top=210, height≈${Math.round(canvasHeight * 0.24)}, width=${singleBlockWidth}, left=60, colored bg (#e8f4fd or similar), 48-52px BOLD
+- Key point cards: 2-3 stacked below, each full-width, height≈${Math.round(canvasHeight * 0.14)}, 44-48px, with subtle border or bg
+- Image: omit UNLESS it directly illustrates the concept — card-based layout is preferred over forced images
+
+**A3 — Comparison (对比页)**
+*Use for: two options, before/after, pros/cons, two approaches*
+- Title bar: top=50, height=128, full-width, 64-72px, LEFT-aligned, colored bg
+- Item A card: top=210, height≈${Math.round(canvasHeight * 0.26)}, full-width, bg #dbeafe, bold label + content (48-52px)
+- Separator: height=44, centered "VS" label or divider line, between the two cards
+- Item B card: directly below separator, same height as A, full-width, bg #dcfce7, bold label + content
+- CRITICAL: NEVER place A and B side-by-side in portrait — always stack A above B vertically
+
+**A4 — Steps / Process (步骤/流程页)**
+*Use for: sequential instructions, how-to procedures, numbered steps*
+- Title bar: top=50, height=128, full-width, 64-72px, LEFT-aligned, colored bg
+- Step cards stacked vertically; each step: numbered badge shape (left=60, 64px number) + card body (48-52px title + 1-line detail 44px)
+- Downward LineElement (width=3, solid, arrow at end) between each pair of step cards
+- MAX 3 steps per page — if outline has more, cover 3 here and note "continued" at bottom
+
+**A5 — Tip / Callout (提示/要点页)**
+*Use for: warnings, critical reminders, key notes, important callouts*
+- Title bar: top=50, height=128, full-width, 64-72px, LEFT-aligned
+- ACCENT BOX (dominant): top=210, height≈${Math.round(canvasHeight * 0.2)}, full-width, strong accent color (#fff3cd/#f8d7da/#dbeafe), 48-52px BOLD
+- Supporting detail cards: 2-3 stacked below, each full-width, height≈${Math.round(canvasHeight * 0.13)}, 44-48px
+- Image: optional, only if directly relevant to the tip content
+
+**A6 — Summary / Wrap-up (总结页)**
+*Use for: scene conclusions, review slides, key takeaway summaries*
+- Title bar: top=50, height=128, full-width, 64-72px, LEFT-aligned
+- MAIN CONCLUSION CARD (dominant): top=210, height≈${Math.round(canvasHeight * 0.22)}, full-width, prominent bg (#f0fdf4 or similar), 48-52px BOLD
+- Takeaway points: 2-3 stacked below, full-width, 44-48px, LEFT-aligned list items
+- NO decorative images — keep this page clean and information-focused
+
+---
+
+### Portrait Visual Hierarchy — Mandatory Design Principles
+
+**ANTI-PATTERN — Never use the "Centered Stack" pattern:**
+This is the #1 failure mode for portrait slides — it looks like a PPT transplanted to mobile:
+- All text elements centered with text-align:center
+- No colored backgrounds or card framing
+- Title, subtitle, body, and footnote all have the same visual weight
+- Text blocks floating in white space with no structural framing
+
+**REQUIRED — Use these design principles to create real visual hierarchy:**
+
+1. **Title bar = visual anchor (required for ALL archetypes)**
+   - Place a ShapeElement (fill with a strong color: #1e40af, #065f46, #7c3aed, #b45309, etc.) as the title background
+   - Shape: left=0, top=50, width=${canvasWidth}, height=140-160px
+   - Title text sits on top: left=60, same top as shape, LEFT-ALIGNED, white or high-contrast color, 64-72px
+   - This creates an immediate, unambiguous visual entry point at the top of every slide
+
+2. **One dominant content element per page**
+   - Every slide must have exactly ONE element with the highest visual weight (the "hero" card)
+   - Hero card characteristics: full-width, colored background, 48-56px text, placed at top of content zone (~top=210)
+   - All other elements below are secondary: lighter colors, slightly smaller font (44-48px)
+
+3. **Left-align body content (not centered)**
+   - Body text default: text-align: left (NOT center)
+   - Center ONLY: single number/icon badges, very short captions (≤5 chars)
+   - Left-aligned content creates natural reading rhythm down the page
+
+4. **Structural framing with shapes**
+   - Use ShapeElement with fill colors to create card containers
+   - Cards give content areas clear visual boundaries
+   - A page with 3 colored cards stacked vertically is far better than 3 bare text blocks
+
+---
+
+### Portrait Media Strategy — Image Usage Rules
+
+Use images only when they serve a clear structural role. Do NOT use images as decoration.
+
+| Structural role | Appropriate page type | Recommended width |
+|-----------------|----------------------|-------------------|
+| Main visual anchor | Cover/Lead-in (A1) — image IS the main visual | ~${Math.round(singleBlockWidth * 0.9)}px, centered |
+| Step illustration | Process (A4) — placed BELOW the relevant step card | ~${Math.round(singleBlockWidth * 0.72)}px |
+| Concept diagram | Definition (A2) ONLY if image clarifies better than words | ~${Math.round(singleBlockWidth * 0.8)}px |
+
+**Skip the image entirely when:**
+- No image is assigned to this scene, or assigned image is not relevant
+- Page archetype is Comparison (A3) or Summary (A6) — card-only layout is cleaner
+- Adding the image would reduce the text/card area and make content feel crowded
+- The image is decorative, loosely related, or just filling empty space
+
+**Image sizing rules:**
+- Landscape images (aspect ratio > 1.5): max width ${Math.round(singleBlockWidth * 0.85)}px; height = width ÷ aspect_ratio
+- Square or portrait images (ratio ≤ 1.0): width ${Math.round(singleBlockWidth * 0.5)}–${Math.round(singleBlockWidth * 0.65)}px
+
+**No image available?** Build a card-based layout — it looks more professional than a forced irrelevant image.`;
+  } else {
+    const singleBlockWidth = canvasWidth - 120;
+    const contentBottom = Math.round(canvasHeight * 0.85);
+    return `### Landscape Canvas Rules (canvas_width ${canvasWidth} > canvas_height ${canvasHeight})
+
+This is a **LANDSCAPE** canvas. Standard horizontal layout applies.
+
+- Two-column or three-column side-by-side card layouts are appropriate when content warrants it.
+- Standard structure: title at top, content body below — keep content within top 85% of canvas height (y ≤ ${contentBottom}px).
+- Full-width elements: up to ${singleBlockWidth}px wide (left=60).
+- Avoid large empty regions in the lower 20% of the canvas.`;
+  }
+}
+
+/**
+ * Portrait Slide Generator（Phase 7）
+ *
+ * 两段式生成：
+ * 1. AI 输出 PortraitContentManifest（archetype + 内容槽位）
+ * 2. renderPortraitTemplate() 将 manifest 渲染为精确元素列表（程序控制坐标）
+ *
+ * 失败时返回 null，调用方降级走旧生成路径。
+ */
+async function generatePortraitSlide(
+  outline: SceneOutline,
+  aiCall: AICallFn,
+  assignedImages: PdfImage[] | undefined,
+  imageMapping: ImageMapping | undefined,
+  generatedMediaMapping: ImageMapping | undefined,
+  canvasWidth: number,
+  canvasHeight: number,
+): Promise<GeneratedSlideContent | null> {
+  try {
+    // Step 1: AI → manifest
+    const system = buildPortraitManifestSystemPrompt();
+    const user = buildPortraitManifestUserPrompt(outline, assignedImages);
+    const response = await aiCall(system, user);
+    const manifest = parseJsonResponse<PortraitContentManifest>(response);
+
+    if (!manifest || !isValidManifest(manifest)) {
+      log.warn(`Portrait manifest invalid for "${outline.title}", falling back to landscape path`);
+      return null;
+    }
+
+    // Step 2: 解析图片信息（供 lead 图片槽位计算高度）
+    let imageInfo: ImageInfo | undefined;
+    if (manifest.imageId && manifest.imageRole !== 'skip') {
+      if (manifest.imageId.startsWith('gen_')) {
+        imageInfo = { id: manifest.imageId, aspectRatio: 16 / 9 };
+      } else if (assignedImages) {
+        const imgMeta = assignedImages.find((img) => img.id === manifest.imageId);
+        if (imgMeta?.width && imgMeta?.height) {
+          imageInfo = { id: manifest.imageId, aspectRatio: imgMeta.width / imgMeta.height };
+        } else if (imgMeta) {
+          imageInfo = { id: manifest.imageId, aspectRatio: 4 / 3 };
+        }
+      }
+    }
+
+    // Step 3: 渲染模板
+    const { elements: rawElements, background } = renderPortraitTemplate(
+      manifest,
+      canvasWidth,
+      canvasHeight,
+      imageInfo,
+    );
+
+    // Step 4: 修复默认值 + 解析图片 ID
+    const fixedElements = fixElementDefaults(
+      rawElements as GeneratedSlideData['elements'],
+      assignedImages,
+    );
+    const resolvedElements = resolveImageIds(fixedElements, imageMapping, generatedMediaMapping);
+
+    // Step 5: 分配 nanoid + rotate
+    const processedElements: PPTElement[] = resolvedElements.map((el) => ({
+      ...el,
+      id: `${el.type}_${nanoid(8)}`,
+      rotate: 0,
+    })) as PPTElement[];
+
+    // Step 6: Lint + 最多 1 次 repair
+    const rawEls = processedElements as unknown as Record<string, unknown>[];
+    const lintResult = lintPortraitLayout(rawEls, canvasWidth, canvasHeight);
+    let finalElements = processedElements;
+
+    if (!lintResult.pass) {
+      log.info(
+        `Portrait template lint failed for "${outline.title}" — violations: ` +
+          lintResult.violations.map((v) => v.rule).join(', ') +
+          ' — attempting 1 repair',
+      );
+      try {
+        const repairResult = await repairPortraitLayout(
+          rawEls,
+          canvasWidth,
+          canvasHeight,
+          aiCall,
+        );
+        log.info(`Portrait repair done: finalPass=${repairResult.finalPass}`);
+        finalElements = repairResult.elements as unknown as PPTElement[];
+      } catch (repairErr) {
+        log.warn(`Portrait template repair failed:`, repairErr);
+      }
+    }
+
+    // Step 7: 处理背景
+    let slideBackground: SlideBackground | undefined;
+    if (background.type === 'solid' && background.color) {
+      slideBackground = { type: 'solid', color: background.color };
+    }
+
+    return {
+      elements: finalElements,
+      background: slideBackground,
+      remark: outline.description,
+    };
+  } catch (err) {
+    log.warn(`generatePortraitSlide threw for "${outline.title}":`, err);
+    return null;
+  }
+}
+
+/**
  * Generate slide content
  */
 async function generateSlideContent(
@@ -548,6 +858,11 @@ async function generateSlideContent(
       ? canvasWidth * viewport.viewportRatio
       : getViewportHeight(canvasWidth, viewportPreset);
 
+  // Orientation-aware design rules
+  const isPortrait = canvasHeight > canvasWidth;
+  const canvasOrientation = isPortrait ? 'portrait' : 'landscape';
+  const orientationDesignRules = buildSlideOrientationRules(canvasWidth, canvasHeight, isPortrait);
+
   const teacherContext = formatTeacherPersonaForPrompt(agents);
 
   const prompts = buildPrompt(PROMPT_IDS.SLIDE_CONTENT, {
@@ -558,6 +873,8 @@ async function generateSlideContent(
     assignedImages: assignedImagesText,
     canvas_width: canvasWidth,
     canvas_height: canvasHeight,
+    canvas_orientation: canvasOrientation,
+    orientation_design_rules: orientationDesignRules,
     teacherContext,
   });
 
@@ -582,6 +899,49 @@ async function generateSlideContent(
   }
 
   log.debug(`Got ${generatedData.elements.length} elements for: ${outline.title}`);
+
+  // ── Phase 7: Portrait template engine path ───────────────────────────────
+  // 新路径：manifest → 模板引擎，AI 不自由排版坐标。横版不走此路径。
+  if (isPortrait) {
+    const portraitResult = await generatePortraitSlide(
+      outline,
+      aiCall,
+      assignedImages,
+      imageMapping,
+      generatedMediaMapping,
+      canvasWidth,
+      canvasHeight,
+    );
+    if (portraitResult) {
+      log.info(`Portrait template engine succeeded for "${outline.title}"`);
+      return portraitResult;
+    }
+    log.warn(`Portrait template engine failed for "${outline.title}", falling back to old path`);
+  }
+  // ── End Phase 7 ───────────────────────────────────────────────────────────
+
+  // ── Portrait layout quality check + auto-repair ──────────────────────────
+  // 仅对竖版画布触发，横版不进入此链路
+  if (isPortrait) {
+    const rawEls = generatedData.elements as Record<string, unknown>[];
+    const initialLint = lintPortraitLayout(rawEls, canvasWidth, canvasHeight);
+    if (!initialLint.pass) {
+      log.info(
+        `Portrait lint failed for "${outline.title}" — violations: ` +
+          initialLint.violations.map((v) => v.rule).join(', '),
+      );
+      try {
+        const repairResult = await repairPortraitLayout(rawEls, canvasWidth, canvasHeight, aiCall);
+        log.info(
+          `Portrait repair done: ${repairResult.repairAttempts} attempt(s), finalPass=${repairResult.finalPass}`,
+        );
+        generatedData.elements = repairResult.elements as typeof generatedData.elements;
+      } catch (repairErr) {
+        log.warn(`Portrait repair threw unexpectedly, using original content:`, repairErr);
+      }
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   // Debug: Log image elements before resolution
   const imageElements = generatedData.elements.filter((el) => el.type === 'image');

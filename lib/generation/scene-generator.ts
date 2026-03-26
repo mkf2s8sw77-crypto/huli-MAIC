@@ -863,6 +863,27 @@ async function generateSlideContent(
   const canvasOrientation = isPortrait ? 'portrait' : 'landscape';
   const orientationDesignRules = buildSlideOrientationRules(canvasWidth, canvasHeight, isPortrait);
 
+  // ── Phase 7: Portrait template engine path ───────────────────────────────
+  // 新路径：manifest → 模板引擎，AI 不自由排版坐标。横版不走此路径。
+  // 必须在旧路径 aiCall 之前执行，避免 portrait 成功时浪费一次 AI 调用。
+  if (isPortrait) {
+    const portraitResult = await generatePortraitSlide(
+      outline,
+      aiCall,
+      assignedImages,
+      imageMapping,
+      generatedMediaMapping,
+      canvasWidth,
+      canvasHeight,
+    );
+    if (portraitResult) {
+      log.info(`Portrait template engine succeeded for "${outline.title}"`);
+      return portraitResult;
+    }
+    log.warn(`Portrait template engine failed for "${outline.title}", falling back to old path`);
+  }
+  // ── End Phase 7 ───────────────────────────────────────────────────────────
+
   const teacherContext = formatTeacherPersonaForPrompt(agents);
 
   const prompts = buildPrompt(PROMPT_IDS.SLIDE_CONTENT, {
@@ -899,26 +920,6 @@ async function generateSlideContent(
   }
 
   log.debug(`Got ${generatedData.elements.length} elements for: ${outline.title}`);
-
-  // ── Phase 7: Portrait template engine path ───────────────────────────────
-  // 新路径：manifest → 模板引擎，AI 不自由排版坐标。横版不走此路径。
-  if (isPortrait) {
-    const portraitResult = await generatePortraitSlide(
-      outline,
-      aiCall,
-      assignedImages,
-      imageMapping,
-      generatedMediaMapping,
-      canvasWidth,
-      canvasHeight,
-    );
-    if (portraitResult) {
-      log.info(`Portrait template engine succeeded for "${outline.title}"`);
-      return portraitResult;
-    }
-    log.warn(`Portrait template engine failed for "${outline.title}", falling back to old path`);
-  }
-  // ── End Phase 7 ───────────────────────────────────────────────────────────
 
   // ── Portrait layout quality check + auto-repair ──────────────────────────
   // 仅对竖版画布触发，横版不进入此链路

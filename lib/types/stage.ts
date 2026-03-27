@@ -27,6 +27,8 @@ export interface Stage {
   viewportRatio?: number;
   // Whiteboard data
   whiteboard?: Whiteboard[];
+  // Agent IDs selected when this classroom was created
+  agentIds?: string[];
 }
 
 /**

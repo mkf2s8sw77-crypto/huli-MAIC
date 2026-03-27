@@ -483,6 +483,9 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
                   </span>
                 </div>
               )}
+              <p className="text-[11px] text-muted-foreground/60">
+                {t('settings.ttsVoiceConfigHint')}
+              </p>
             </TabPanel>
           )}
 

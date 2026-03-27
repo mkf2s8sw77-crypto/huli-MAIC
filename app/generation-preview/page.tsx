@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { useStageStore } from '@/lib/store/stage';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useAgentRegistry } from '@/lib/orchestration/registry/store';
+import { getAvailableProvidersWithVoices } from '@/lib/audio/voice-resolver';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import {
   loadImageMapping,
@@ -398,6 +399,17 @@ function GenerationPreviewContent() {
         try {
           const allAvatars = [...GENERATED_AGENT_AVATARS];
 
+          const getAvailableVoicesForGeneration = () => {
+            const providers = getAvailableProvidersWithVoices(settings.ttsProvidersConfig);
+            return providers.flatMap((p) =>
+              p.voices.map((v) => ({
+                providerId: p.providerId,
+                voiceId: v.id,
+                voiceName: v.name,
+              })),
+            );
+          };
+
           // No outlines yet — agent generation uses only stage name + description
           const agentResp = await fetch('/api/generate/agent-profiles', {
             method: 'POST',
@@ -406,6 +418,7 @@ function GenerationPreviewContent() {
               stageInfo: { name: stage.name, description: stage.description },
               language: currentSession.requirements.language || 'zh-CN',
               availableAvatars: allAvatars,
+              availableVoices: getAvailableVoicesForGeneration(),
             }),
             signal,
           });
@@ -418,6 +431,7 @@ function GenerationPreviewContent() {
           const { saveGeneratedAgents } = await import('@/lib/orchestration/registry/store');
           const savedIds = await saveGeneratedAgents(stage.id, agentData.agents);
           settings.setSelectedAgentIds(savedIds);
+          stage.agentIds = savedIds;
 
           // Show card-reveal modal, continue generation once all cards are revealed
           setGeneratedAgents(agentData.agents);
@@ -438,7 +452,11 @@ function GenerationPreviewContent() {
         } catch (err: unknown) {
           log.warn('[Generation] Agent generation failed, falling back to presets:', err);
           const registry = useAgentRegistry.getState();
-          agents = settings.selectedAgentIds
+          const fallbackIds = settings.selectedAgentIds.filter((id) => {
+            const a = registry.getAgent(id);
+            return a && !a.isGenerated;
+          });
+          agents = fallbackIds
             .map((id) => registry.getAgent(id))
             .filter(Boolean)
             .map((a) => ({
@@ -447,11 +465,17 @@ function GenerationPreviewContent() {
               role: a!.role,
               persona: a!.persona,
             }));
+          stage.agentIds = fallbackIds;
         }
       } else {
         // Preset mode — use selected agents (include persona)
+        // Filter out stale generated agent IDs that may linger in settings
         const registry = useAgentRegistry.getState();
-        agents = settings.selectedAgentIds
+        const presetAgentIds = settings.selectedAgentIds.filter((id) => {
+          const a = registry.getAgent(id);
+          return a && !a.isGenerated;
+        });
+        agents = presetAgentIds
           .map((id) => registry.getAgent(id))
           .filter(Boolean)
           .map((a) => ({
@@ -460,6 +484,7 @@ function GenerationPreviewContent() {
             role: a!.role,
             persona: a!.persona,
           }));
+        stage.agentIds = presetAgentIds;
       }
 
       // ── Generate outlines (with agent personas for teacher context) ──
@@ -781,6 +806,7 @@ function GenerationPreviewContent() {
         log.info('[GenerationPreview] Generation aborted');
         return;
       }
+      sessionStorage.removeItem('generationSession');
       setError(err instanceof Error ? err.message : String(err));
     }
   };

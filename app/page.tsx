@@ -95,13 +95,12 @@ function HomePage() {
 
   // Model setup state
   const currentModelId = useSettingsStore((s) => s.modelId);
-  const [storeHydrated, setStoreHydrated] = useState(false);
+  const needsSetup = !currentModelId;
   const [recentOpen, setRecentOpen] = useState(true);
 
   // Hydrate client-only state after mount (avoids SSR mismatch)
   /* eslint-disable react-hooks/set-state-in-effect -- Hydration from localStorage must happen in effect */
   useEffect(() => {
-    setStoreHydrated(true);
     try {
       const saved = localStorage.getItem(RECENT_OPEN_STORAGE_KEY);
       if (saved !== null) setRecentOpen(saved !== 'false');
@@ -141,7 +140,6 @@ function HomePage() {
     }
   }
 
-  const needsSetup = storeHydrated && !currentModelId;
   const [languageOpen, setLanguageOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -462,10 +460,7 @@ function HomePage() {
         <div className="relative">
           <button
             onClick={() => setSettingsOpen(true)}
-            className={cn(
-              'p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group',
-              needsSetup && 'animate-setup-glow',
-            )}
+            className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
           >
             <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" />
           </button>

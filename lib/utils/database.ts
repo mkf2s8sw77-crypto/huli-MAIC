@@ -50,6 +50,7 @@ export interface StageRecord {
   viewportSize?: number;
   viewportRatio?: number;
   currentSceneId?: string;
+  agentIds?: string[]; // Agent IDs selected at creation time
 }
 
 /**

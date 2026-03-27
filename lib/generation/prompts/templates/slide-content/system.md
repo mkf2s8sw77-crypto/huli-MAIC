@@ -41,6 +41,14 @@ You are an educational content designer. Generate well-structured slide componen
 
 ---
 
+## Orientation-Aware Design Rules
+
+**Canvas orientation: {{canvas_orientation}}**
+
+{{orientation_design_rules}}
+
+---
+
 ## Output Structure
 
 ```json
@@ -506,6 +514,8 @@ When splitting a derivation across multiple LaTeX elements (one per line), simpl
 
 **All TextElement heights must come from this table.** (line-height=1.5, includes 10px padding on each side)
 
+**Landscape slides** typically use 14-32px. **Portrait slides** must use 32-72px (see Portrait Typography rules).
+
 | Font Size | 1 line | 2 lines | 3 lines | 4 lines | 5 lines |
 | --------- | ------ | ------- | ------- | ------- | ------- |
 | 14px      | 43     | 64      | 85      | 106     | 127     |
@@ -516,6 +526,14 @@ When splitting a derivation across multiple LaTeX elements (one per line), simpl
 | 28px      | 64     | 106     | 148     | 190     | 232     |
 | 32px      | 70     | 118     | 166     | 214     | 262     |
 | 36px      | 76     | 130     | 184     | 238     | 292     |
+| 40px      | 80     | 140     | 200     | 260     | 320     |
+| 44px      | 86     | 152     | 218     | 284     | 350     |
+| 48px      | 92     | 164     | 236     | 308     | 380     |
+| 52px      | 98     | 176     | 254     | 332     | 410     |
+| 56px      | 104    | 188     | 272     | 356     | 440     |
+| 60px      | 110    | 200     | 290     | 380     | 470     |
+| 64px      | 116    | 212     | 308     | 404     | 500     |
+| 72px      | 128    | 236     | 344     | 452     | 560     |
 
 ---
 
@@ -593,6 +611,8 @@ Element 1: left = 60,  width = 280
 Element 2: left = 360, width = 280  (gap = 20px)
 Element 3: left = 660, width = 280  (gap = 20px)  ✓ (consistent)
 ```
+
+> **Portrait restriction**: In portrait orientation (canvas_height > canvas_width), use at most **2 parallel elements** per row. Three-column layouts are prohibited in portrait — use a vertical stack instead.
 
 **Key principle**: Human eyes detect differences as small as 5px. Use identical values—never approximate.
 
@@ -706,6 +726,8 @@ text:  left=80, top=172, width=360, height=76   ✓ CENTERED
 ```
 
 #### Complete Example: Three-Column Card Layout
+
+> **LANDSCAPE ONLY** — Do NOT use three-column layout in portrait orientation (canvas_height > canvas_width). In portrait, use a single full-width bulleted list or a two-column layout instead.
 
 Three cards side by side, each with centered text:
 

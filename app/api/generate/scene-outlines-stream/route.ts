@@ -33,6 +33,10 @@ import type {
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import {
+  buildOutlineOrientationRules,
+  enforcePortraitOutlineMediaPolicy,
+} from '@/lib/generation/outline-generator';
 const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
@@ -184,6 +188,8 @@ export async function POST(req: NextRequest) {
       researchContext: researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
       mediaGenerationPolicy,
       teacherContext,
+      // Orientation-aware outline rules: portrait gets finer-grained scene splitting
+      outline_orientation_rules: buildOutlineOrientationRules(requirements.viewportPreset),
     });
 
     if (!prompts) {
@@ -264,11 +270,15 @@ export async function POST(req: NextRequest) {
                     id: outline.id || nanoid(),
                     order: parsedOutlines.length + 1,
                   };
-                  parsedOutlines.push(enriched);
+                  const sanitized = enforcePortraitOutlineMediaPolicy(
+                    [enriched],
+                    requirements.viewportPreset,
+                  )[0];
+                  parsedOutlines.push(sanitized);
 
                   const event = JSON.stringify({
                     type: 'outline',
-                    data: enriched,
+                    data: sanitized,
                     index: parsedOutlines.length - 1,
                   });
                   controller.enqueue(encoder.encode(`data: ${event}\n\n`));
@@ -316,7 +326,9 @@ export async function POST(req: NextRequest) {
 
           if (parsedOutlines.length > 0) {
             // Replace sequential gen_img_N/gen_vid_N with globally unique IDs
-            const uniquifiedOutlines = uniquifyMediaElementIds(parsedOutlines);
+            const uniquifiedOutlines = uniquifyMediaElementIds(
+              enforcePortraitOutlineMediaPolicy(parsedOutlines, requirements.viewportPreset),
+            );
             // Send done event with all outlines
             const doneEvent = JSON.stringify({
               type: 'done',

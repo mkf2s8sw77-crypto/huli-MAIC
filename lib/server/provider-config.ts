@@ -60,6 +60,16 @@ const TTS_ENV_MAP: Record<string, string> = {
   TTS_ELEVENLABS: 'elevenlabs-tts',
 };
 
+function hasTencentTTSSecrets(): boolean {
+  return !!process.env.TTS_TENCENT_SECRET_ID?.trim() && !!process.env.TTS_TENCENT_SECRET_KEY?.trim();
+}
+
+function getTencentTTSEndpoint(): string | undefined {
+  const raw = (process.env.TTS_TENCENT_ENDPOINT || '').trim();
+  if (!raw) return undefined;
+  return raw.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+}
+
 const ASR_ENV_MAP: Record<string, string> = {
   ASR_OPENAI: 'openai-whisper',
   ASR_QWEN: 'qwen-asr',
@@ -195,9 +205,10 @@ function buildConfig(yamlData: YamlData): ServerConfig {
 }
 
 function logConfig(config: ServerConfig, label: string): void {
+  const ttsCount = Object.keys(config.tts).length + (hasTencentTTSSecrets() ? 1 : 0);
   const counts = [
     Object.keys(config.providers).length,
-    Object.keys(config.tts).length,
+    ttsCount,
     Object.keys(config.asr).length,
     Object.keys(config.pdf).length,
     Object.keys(config.image).length,
@@ -266,6 +277,11 @@ export function getServerTTSProviders(): Record<string, { baseUrl?: string }> {
     result[id] = {};
     if (entry.baseUrl) result[id].baseUrl = entry.baseUrl;
   }
+  if (hasTencentTTSSecrets()) {
+    result['tencent-tts'] = {};
+    const endpoint = getTencentTTSEndpoint();
+    if (endpoint) result['tencent-tts'].baseUrl = endpoint;
+  }
   return result;
 }
 
@@ -276,7 +292,22 @@ export function resolveTTSApiKey(providerId: string, clientKey?: string): string
 
 export function resolveTTSBaseUrl(providerId: string, clientBaseUrl?: string): string | undefined {
   if (clientBaseUrl) return clientBaseUrl;
+  if (providerId === 'tencent-tts') {
+    return getTencentTTSEndpoint() || 'tts.tencentcloudapi.com';
+  }
   return getConfig().tts[providerId]?.baseUrl;
+}
+
+export function resolveTTSTencentSecretId(): string {
+  return (process.env.TTS_TENCENT_SECRET_ID || '').trim();
+}
+
+export function resolveTTSTencentSecretKey(): string {
+  return (process.env.TTS_TENCENT_SECRET_KEY || '').trim();
+}
+
+export function resolveTTSTencentRegion(): string {
+  return (process.env.TTS_TENCENT_REGION || 'ap-beijing').trim();
 }
 
 // ---------------------------------------------------------------------------

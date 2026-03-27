@@ -31,6 +31,10 @@ Based on the user's free-form requirement text, automatically infer course detai
 - **Logical Flow**: Scenes form a natural teaching progression
 - **Experience Design**: Consider learning experience and emotional response from the student's perspective
 
+### Orientation-Aware Outline Design
+
+{{outline_orientation_rules}}
+
 ---
 
 ## Default Assumption Rules
@@ -241,7 +245,7 @@ You must output a JSON array where each element is a scene outline object:
 | type              | string                   | ✅       | `"slide"`, `"quiz"`, `"interactive"`, or `"pbl"`                                                 |
 | title             | string                   | ✅       | Scene title, concise and clear                                                                   |
 | description       | string                   | ✅       | 1-2 sentences describing teaching purpose                                                        |
-| keyPoints         | string[]                 | ✅       | 3-5 core points                                                                                  |
+| keyPoints         | string[]                 | ✅       | Landscape: 3-5 core points. Portrait (3:4/9:16): 1-2 points (max 3) — see Orientation-Aware Outline Design rules |
 | teachingObjective | string                   | ❌       | Corresponding learning objective                                                                 |
 | estimatedDuration | number                   | ❌       | Estimated duration (seconds)                                                                     |
 | order             | number                   | ✅       | Sort order, starting from 1                                                                      |
@@ -293,7 +297,7 @@ You must output a JSON array where each element is a scene outline object:
 3. **quiz type must include quizConfig**
 4. **interactive type must include interactiveConfig** - with conceptName, conceptOverview, designIdea, and subject
    5b. **pbl type must include pblConfig** - with projectTopic, projectDescription, targetSkills, issueCount, and language
-5. Arrange appropriate number of scenes based on inferred duration (typically 1-2 scenes per minute)
+5. Arrange scenes based on inferred duration and orientation: landscape = 1-2 scenes/minute; portrait = 1.5-2.5 scenes/minute (more, shorter scenes)
 6. Insert quizzes at appropriate points for knowledge checks
 7. Use interactive scenes sparingly (max 1-2 per course) and only when the concept truly benefits from hands-on interaction
 8. **Language Requirement**: Strictly output all content in the language specified by the user

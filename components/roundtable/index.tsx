@@ -287,6 +287,7 @@ export function Roundtable({
   const teacherAvatar = teacherParticipant?.avatar || DEFAULT_TEACHER_AVATAR;
   const teacherName = teacherParticipant?.name || t('roundtable.teacher');
   const userAvatar = userParticipant?.avatar || DEFAULT_USER_AVATAR;
+  const teacherAvatarSrc = withBasePath(normalizeAgentAvatar(teacherAvatar, { role: 'teacher' }));
 
   // Audio recording
   const { isRecording, isProcessing, startRecording, stopRecording } = useAudioRecorder({
@@ -507,11 +508,7 @@ export function Roundtable({
                       />
 
                       <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 overflow-hidden relative z-10 shadow-sm border border-gray-50 dark:border-gray-700">
-                        <img
-                          src={teacherAvatar}
-                          alt="Teacher"
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={teacherAvatarSrc} alt="Teacher" className="w-full h-full object-cover" />
                       </div>
 
                       {activeRole === 'teacher' && (
@@ -546,11 +543,7 @@ export function Roundtable({
                       <>
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-gray-100 dark:bg-gray-800">
-                            <img
-                              src={teacherAvatar}
-                              alt={teacherName}
-                              className="w-full h-full object-cover"
-                            />
+                            <img src={teacherAvatarSrc} alt={teacherName} className="w-full h-full object-cover" />
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{teacherName}</p>
@@ -1191,6 +1184,9 @@ export function Roundtable({
                     thinkingState?.stage === 'agent_loading' &&
                     thinkingState.agentId === student.id;
                   const agentConfig = useAgentRegistry.getState().getAgent(student.id);
+                  const studentAvatarSrc = withBasePath(
+                    normalizeAgentAvatar(student.avatar, { role: student.role }),
+                  );
                   const roleLabelKey = agentConfig?.role as
                     | 'teacher'
                     | 'assistant'
@@ -1252,11 +1248,7 @@ export function Roundtable({
                               )}
                             />
                             <div className="absolute inset-0.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                              <img
-                                src={student.avatar}
-                                alt={student.name}
-                                className="w-full h-full"
-                              />
+                              <img src={studentAvatarSrc} alt={student.name} className="w-full h-full" />
                             </div>
                             {/* Speaking indicator */}
                             {isSpeaking && (
@@ -1277,11 +1269,7 @@ export function Roundtable({
                         >
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-gray-100 dark:bg-gray-800">
-                              <img
-                                src={student.avatar}
-                                alt={student.name}
-                                className="w-full h-full"
-                              />
+                              <img src={studentAvatarSrc} alt={student.name} className="w-full h-full" />
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm font-medium truncate">{student.name}</p>
@@ -1334,6 +1322,11 @@ export function Roundtable({
                   const agentConfig = useAgentRegistry
                     .getState()
                     .getAgent(discussionRequest.agentId || '');
+                  const proactiveAvatarSrc = withBasePath(
+                    normalizeAgentAvatar(matchedStudent?.avatar || agentConfig?.avatar, {
+                      role: matchedStudent ? 'student' : agentConfig?.role,
+                    }),
+                  );
                   return (
                     <ProactiveCard
                       action={discussionRequest}
@@ -1341,7 +1334,7 @@ export function Roundtable({
                       anchorRef={discussionAnchorRef}
                       align="left"
                       agentName={matchedStudent?.name || agentConfig?.name}
-                      agentAvatar={matchedStudent?.avatar || agentConfig?.avatar}
+                      agentAvatar={proactiveAvatarSrc}
                       agentColor={agentConfig?.color}
                       onSkip={() => onDiscussionSkip?.()}
                       onListen={() => onDiscussionStart?.(discussionRequest)}

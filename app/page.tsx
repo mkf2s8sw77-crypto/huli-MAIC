@@ -46,6 +46,7 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
+import { ServerProvidersInit } from '@/components/server-providers-init';
 import { withBasePath } from '@/lib/utils/base-path';
 import { LICENSE_URL, SOURCE_CODE_URL } from '@/lib/constants/open-source';
 import {
@@ -343,6 +344,7 @@ function HomePage() {
 
   return (
     <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center px-4 pt-16 pb-4 md:px-8 md:pt-16 md:pb-6 overflow-x-hidden">
+      <ServerProvidersInit />
       {/* ═══ Top-right pill (unchanged) ═══ */}
       <div
         ref={toolbarRef}
@@ -355,7 +357,7 @@ function HomePage() {
               setLanguageOpen(!languageOpen);
               setThemeOpen(false);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all"
+            className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full text-xs font-bold text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all"
           >
             {locale === 'zh-CN' ? 'CN' : 'EN'}
           </button>
@@ -473,7 +475,7 @@ function HomePage() {
                 <span className="animate-setup-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-violet-500" />
               </span>
-              <span className="animate-setup-float absolute top-full mt-2 right-0 whitespace-nowrap text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/50 px-2 py-0.5 rounded-full shadow-sm pointer-events-none">
+              <span className="animate-setup-float absolute top-full mt-2 right-0 whitespace-nowrap text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/50 px-2 py-0.5 rounded-full shadow-sm pointer-events-none hidden sm:inline-flex">
                 {t('settings.setupNeeded')}
               </span>
             </>
@@ -563,8 +565,8 @@ function HomePage() {
               rows={4}
             />
 
-            {/* Toolbar row */}
-            <div className="px-3 pb-3 flex items-end gap-2">
+            {/* Toolbar row — stacks vertically on mobile, row on sm+ */}
+            <div className="px-3 pb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="flex-1 min-w-0">
                 <GenerationToolbar
                   language={form.language}
@@ -583,32 +585,35 @@ function HomePage() {
                 />
               </div>
 
-              {/* Voice input */}
-              <SpeechButton
-                size="md"
-                onTranscription={(text) => {
-                  setForm((prev) => {
-                    const next = prev.requirement + (prev.requirement ? ' ' : '') + text;
-                    updateRequirementCache(next);
-                    return { ...prev, requirement: next };
-                  });
-                }}
-              />
+              {/* Actions row: voice + send — right-aligned on mobile, inline on sm+ */}
+              <div className="flex items-center gap-2 justify-end shrink-0">
+                {/* Voice input */}
+                <SpeechButton
+                  size="md"
+                  onTranscription={(text) => {
+                    setForm((prev) => {
+                      const next = prev.requirement + (prev.requirement ? ' ' : '') + text;
+                      updateRequirementCache(next);
+                      return { ...prev, requirement: next };
+                    });
+                  }}
+                />
 
-              {/* Send button */}
-              <button
-                onClick={handleGenerate}
-                disabled={!canGenerate}
-                className={cn(
-                  'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
-                  canGenerate
-                    ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm cursor-pointer'
-                    : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
-                )}
-              >
-                <span className="text-xs font-medium">{t('toolbar.enterClassroom')}</span>
-                <ArrowUp className="size-3.5" />
-              </button>
+                {/* Send button */}
+                <button
+                  onClick={handleGenerate}
+                  disabled={!canGenerate}
+                  className={cn(
+                    'shrink-0 h-9 sm:h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-4 sm:px-3',
+                    canGenerate
+                      ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm cursor-pointer'
+                      : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
+                  )}
+                >
+                  <span className="text-xs font-medium">{t('toolbar.enterClassroom')}</span>
+                  <ArrowUp className="size-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </motion.div>

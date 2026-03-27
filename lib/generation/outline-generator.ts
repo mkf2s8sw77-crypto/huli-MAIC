@@ -20,6 +20,76 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
 /**
+ * Build orientation-aware outline design rules for the outline generation prompt.
+ * Portrait (3:4 / 9:16) produces finer-grained, more numerous scenes.
+ * Landscape (16:9 / 4:3) keeps the standard overview-friendly pacing.
+ */
+export function buildOutlineOrientationRules(viewportPreset?: string | null): string {
+  const isPortrait = viewportPreset === '3:4' || viewportPreset === '9:16';
+
+  if (isPortrait) {
+    return `### Portrait Orientation Outline Design (${viewportPreset})
+
+This course uses a **portrait canvas** (${viewportPreset}). Portrait content is consumed top-to-bottom like a feed or short-form video — apply every rule below WITHOUT EXCEPTION.
+
+**Scene granularity: FINE — one concept per scene**
+- If a topic has multiple sub-points, split them into separate scenes, not a single overview scene
+- Limit to **1-2 keyPoints per scene** (absolute max: 3). Never put 4+ keyPoints in one scene
+- Short, atomic scenes: estimatedDuration 60-90 seconds each (not 2-3 minutes)
+
+**Scene type preferences for portrait**
+- Prefer: single-concept explanation, step-by-step breakdown, focused example, one-point summary
+- Avoid: overview pages listing 3+ parallel items — break them into individual focused scenes
+- Comparison content (A vs B vs C): split into **sequential scenes** (one per item), never a single side-by-side scene
+
+**Pacing: more scenes, less per scene**
+- For a 15-minute course, target **20-28 scenes** (vs ~12-18 for landscape)
+- At most one intro/overview scene at the start, one wrap-up at the end; avoid mid-course overview dumps
+- Each scene covers exactly one teaching action: introduce ONE concept, explain it, give ONE example
+
+**Mandatory splitting rules — apply mechanically**
+- You would put 4 keyPoints in one scene → split into 2 scenes of 2 keyPoints each
+- Scene title is "Overview of X, Y, Z" → create a brief intro scene + separate "X", "Y", "Z" scenes
+- A scene compares 3+ items side-by-side → each item becomes its own dedicated scene
+- A scene has "Step 1 / Step 2 / Step 3" → each step is a separate scene
+
+**Portrait Image Policy — images are fully disabled**
+- Portrait slides are **text/card-only compositions**. Do NOT plan any image usage.
+- \`mediaGenerations\` quota for a portrait course: **0 total**
+- Do NOT add \`suggestedImageIds\` to any portrait scene, even if PDF images are available
+- Do NOT add \`mediaGenerations\` to any portrait scene, even for opening/cover pages
+- If a visual aid seems useful, convert it into text cards or step cards instead of using an image`;
+  } else {
+    return `### Landscape Orientation Outline Design (${viewportPreset || '16:9'})
+
+This course uses a **landscape canvas** (${viewportPreset || '16:9'}). Standard presentation pacing applies — do NOT fragment scenes unnecessarily.
+
+- Scenes can contain **3-5 keyPoints each**
+- Overview, comparison, and summary slides are appropriate and encouraged for landscape
+- Target **1-2 scenes per minute** of course duration
+- Side-by-side comparisons and three-column overviews are fine when content warrants them
+- Do NOT split scenes just to increase count — concise, well-structured scenes are preferred`;
+  }
+}
+
+function stripPortraitMediaFromOutline(outline: SceneOutline): SceneOutline {
+  return {
+    ...outline,
+    suggestedImageIds: undefined,
+    mediaGenerations: undefined,
+  };
+}
+
+export function enforcePortraitOutlineMediaPolicy(
+  outlines: SceneOutline[],
+  viewportPreset?: string | null,
+): SceneOutline[] {
+  const isPortrait = viewportPreset === '3:4' || viewportPreset === '9:16';
+  if (!isPortrait) return outlines;
+  return outlines.map(stripPortraitMediaFromOutline);
+}
+
+/**
  * Generate scene outlines from user requirements
  * Now uses simplified UserRequirements with just requirement text and language
  */
@@ -111,6 +181,8 @@ export async function generateSceneOutlinesFromRequirements(
       options?.researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
     teacherContext: options?.teacherContext || '',
+    // Orientation-aware outline rules: portrait gets finer-grained scene splitting
+    outline_orientation_rules: buildOutlineOrientationRules(requirements.viewportPreset),
   });
 
   if (!prompts) {
@@ -143,9 +215,10 @@ export async function generateSceneOutlinesFromRequirements(
       order: index + 1,
       language: requirements.language,
     }));
+    const sanitized = enforcePortraitOutlineMediaPolicy(enriched, requirements.viewportPreset);
 
     // Replace sequential gen_img_N/gen_vid_N with globally unique IDs
-    const result = uniquifyMediaElementIds(enriched);
+    const result = uniquifyMediaElementIds(sanitized);
 
     callbacks?.onProgress?.({
       currentStage: 1,

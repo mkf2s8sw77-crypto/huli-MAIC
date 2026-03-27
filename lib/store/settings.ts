@@ -18,6 +18,7 @@ import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import { createLogger } from '@/lib/logger';
+import { withBasePath } from '@/lib/utils/base-path';
 
 const log = createLogger('Settings');
 
@@ -729,7 +730,9 @@ export const useSettingsStore = create<SettingsState>()(
         // Fetch server-configured providers and merge into local state
         fetchServerProviders: async () => {
           try {
-            const res = await fetch('/api/server-providers');
+            const res = await fetch(withBasePath('/api/server-providers?client=1'), {
+              cache: 'no-store',
+            });
             if (!res.ok) return;
             const data = (await res.json()) as {
               providers: Record<string, { models?: string[]; baseUrl?: string }>;

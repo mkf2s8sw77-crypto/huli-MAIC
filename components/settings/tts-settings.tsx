@@ -39,6 +39,7 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
   const ttsProvider = TTS_PROVIDERS[selectedProviderId] ?? TTS_PROVIDERS['openai-tts'];
   const isServerConfigured = !!ttsProvidersConfig[selectedProviderId]?.isServerConfigured;
   const isReadOnly = MEDIA_SETTINGS_LOCKED;
+  const isSecretManagedProvider = selectedProviderId === 'tencent-tts';
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [testText, setTestText] = useState(t('settings.ttsTestTextDefault'));
@@ -96,7 +97,7 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
         </div>
       )}
       {/* API Key & Base URL */}
-      {(ttsProvider.requiresApiKey || isServerConfigured) && (
+      {(ttsProvider.requiresApiKey || (isServerConfigured && !isSecretManagedProvider)) && (
         <>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -167,6 +168,9 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
                 break;
               case 'qwen-tts':
                 endpointPath = '/services/aigc/multimodal-generation/generation';
+                break;
+              case 'tencent-tts':
+                endpointPath = '';
                 break;
               case 'elevenlabs-tts':
                 endpointPath = '/text-to-speech';

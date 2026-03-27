@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   PanelLeftClose,
   PieChart,
@@ -20,6 +19,7 @@ import type { SceneType, SlideContent } from '@/lib/types/stage';
 import { PENDING_SCENE_ID } from '@/lib/store/stage';
 import { withBasePath } from '@/lib/utils/base-path';
 import { getAspectRatioCssValueByRatio, getViewportRatio } from '@/lib/config/viewport';
+import { navigateToAppHome } from '@/lib/utils/navigation';
 
 interface SceneSidebarProps {
   readonly collapsed: boolean;
@@ -39,7 +39,6 @@ export function SceneSidebar({
   onRetryOutline,
 }: SceneSidebarProps) {
   const { t } = useI18n();
-  const router = useRouter();
   const { scenes, currentSceneId, setCurrentSceneId, generatingOutlines, generationStatus } =
     useStageStore();
   const stage = useStageStore.use.stage();
@@ -100,6 +99,9 @@ export function SceneSidebar({
   };
 
   const displayWidth = collapsed ? 0 : sidebarWidth;
+  const goHome = useCallback(() => {
+    navigateToAppHome();
+  }, []);
 
   return (
     <div
@@ -124,7 +126,7 @@ export function SceneSidebar({
         <div className="h-10 flex items-center justify-between shrink-0 relative mt-3 mb-1 px-3">
           <div className="min-w-0">
             <button
-              onClick={() => router.push('/')}
+              onClick={goHome}
               className="flex items-center gap-2 cursor-pointer rounded-lg px-1.5 -mx-1.5 py-1 -my-1 hover:bg-gray-100/80 dark:hover:bg-gray-800/60 active:scale-[0.97] transition-all duration-150"
               title={t('generation.backToHome')}
             >

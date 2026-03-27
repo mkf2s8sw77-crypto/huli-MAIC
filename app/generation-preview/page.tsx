@@ -22,10 +22,14 @@ import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { db } from '@/lib/utils/database';
 import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
 import { nanoid } from 'nanoid';
+import { toast } from 'sonner';
 import type { Stage } from '@/lib/types/stage';
 import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generation';
 import { AgentRevealModal } from '@/components/agent/agent-reveal-modal';
+import { ServerProvidersInit } from '@/components/server-providers-init';
 import { createLogger } from '@/lib/logger';
+import { withBasePath } from '@/lib/utils/base-path';
+import { navigateToAppHome } from '@/lib/utils/navigation';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
 import { GENERATED_AGENT_AVATARS } from '@/lib/utils/agent-avatar';
@@ -36,6 +40,10 @@ import {
 } from '@/lib/config/viewport';
 
 const log = createLogger('GenerationPreview');
+
+function isInsufficientTTSBalance(message: string | undefined): boolean {
+  return !!message && /insufficient balance|余额不足/i.test(message);
+}
 
 function GenerationPreviewContent() {
   const router = useRouter();
@@ -656,7 +664,9 @@ function GenerationPreviewContent() {
         );
 
         let ttsFailCount = 0;
+        let stopRemainingTTS = false;
         for (const action of speechActions) {
+          if (stopRemainingTTS) break;
           const audioId = `tts_${action.id}`;
           action.audioId = audioId;
           try {
@@ -675,12 +685,21 @@ function GenerationPreviewContent() {
               signal,
             });
             if (!resp.ok) {
+              const errData = await resp
+                .json()
+                .catch(() => ({ error: `TTS request failed: HTTP ${resp.status}` }));
               ttsFailCount++;
+              if (isInsufficientTTSBalance(errData?.error || errData?.details)) {
+                stopRemainingTTS = true;
+              }
               continue;
             }
             const ttsData = await resp.json();
             if (!ttsData.success) {
               ttsFailCount++;
+              if (isInsufficientTTSBalance(ttsData.error || ttsData.details)) {
+                stopRemainingTTS = true;
+              }
               continue;
             }
             const binary = atob(ttsData.base64);
@@ -694,13 +713,22 @@ function GenerationPreviewContent() {
               createdAt: Date.now(),
             });
           } catch (err) {
+            if (err instanceof DOMException && err.name === 'AbortError') {
+              throw err;
+            }
             log.warn(`[TTS] Failed for ${audioId}:`, err);
             ttsFailCount++;
+            if (isInsufficientTTSBalance(err instanceof Error ? err.message : String(err))) {
+              stopRemainingTTS = true;
+            }
           }
         }
 
         if (ttsFailCount > 0 && speechActions.length > 0) {
-          throw new Error(t('generation.speechFailed'));
+          log.warn(
+            `[TTS] ${ttsFailCount}/${speechActions.length} speech actions failed; continuing without pre-generated audio`,
+          );
+          toast.warning(t('generation.speechSkippedWarning'));
         }
       }
 
@@ -724,6 +752,28 @@ function GenerationPreviewContent() {
 
       sessionStorage.removeItem('generationSession');
       await store.saveToStorage();
+
+      // Persist the initial classroom snapshot server-side as well, so reloading
+      // /classroom/:id can recover even when IndexedDB state is unavailable.
+      // This snapshot may contain only the first generated scene; the classroom
+      // page will continue generation client-side using outlines/session params.
+      try {
+        const persistedState = useStageStore.getState();
+        if (persistedState.stage && persistedState.scenes.length > 0) {
+          await fetch(withBasePath('/api/classroom'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              stage: persistedState.stage,
+              scenes: persistedState.scenes,
+            }),
+            signal,
+          });
+        }
+      } catch (persistErr) {
+        log.warn('[GenerationPreview] Failed to persist classroom snapshot to server:', persistErr);
+      }
+
       router.push(`/classroom/${stage.id}`);
     } catch (err) {
       // AbortError is expected when navigating away — don't show as error
@@ -746,7 +796,7 @@ function GenerationPreviewContent() {
   const goBackToHome = () => {
     abortControllerRef.current?.abort();
     sessionStorage.removeItem('generationSession');
-    router.push('/');
+    navigateToAppHome();
   };
 
   // Still loading session from sessionStorage
@@ -769,7 +819,7 @@ function GenerationPreviewContent() {
             <AlertCircle className="size-12 text-muted-foreground mx-auto" />
             <h2 className="text-xl font-semibold">{t('generation.sessionNotFound')}</h2>
             <p className="text-sm text-muted-foreground">{t('generation.sessionNotFoundDesc')}</p>
-            <Button onClick={() => router.push('/')} className="w-full">
+            <Button onClick={goBackToHome} className="w-full">
               <ArrowLeft className="size-4 mr-2" />
               {t('generation.backToHome')}
             </Button>
@@ -786,6 +836,7 @@ function GenerationPreviewContent() {
 
   return (
     <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden text-center">
+      <ServerProvidersInit />
       {/* Background Decor */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div

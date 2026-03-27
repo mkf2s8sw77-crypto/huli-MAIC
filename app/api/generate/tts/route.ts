@@ -9,7 +9,13 @@
 
 import { NextRequest } from 'next/server';
 import { generateTTS } from '@/lib/audio/tts-providers';
-import { resolveTTSApiKey, resolveTTSBaseUrl } from '@/lib/server/provider-config';
+import {
+  resolveTTSApiKey,
+  resolveTTSBaseUrl,
+  resolveTTSTencentRegion,
+  resolveTTSTencentSecretId,
+  resolveTTSTencentSecretKey,
+} from '@/lib/server/provider-config';
 import type { TTSProviderId } from '@/lib/audio/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
@@ -46,7 +52,8 @@ export async function POST(req: NextRequest) {
       return apiError('INVALID_REQUEST', 400, 'browser-native-tts must be handled client-side');
     }
 
-    const clientBaseUrl = ttsBaseUrl || undefined;
+    const isServerManagedProvider = ttsProviderId === 'tencent-tts';
+    const clientBaseUrl = isServerManagedProvider ? undefined : ttsBaseUrl || undefined;
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
       const ssrfError = validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
@@ -57,9 +64,21 @@ export async function POST(req: NextRequest) {
     const apiKey = clientBaseUrl
       ? ttsApiKey || ''
       : resolveTTSApiKey(ttsProviderId, ttsApiKey || undefined);
-    const baseUrl = clientBaseUrl
-      ? clientBaseUrl
-      : resolveTTSBaseUrl(ttsProviderId, ttsBaseUrl || undefined);
+    const baseUrl = resolveTTSBaseUrl(ttsProviderId, clientBaseUrl);
+    const secretId =
+      ttsProviderId === 'tencent-tts' ? resolveTTSTencentSecretId() : undefined;
+    const secretKey =
+      ttsProviderId === 'tencent-tts' ? resolveTTSTencentSecretKey() : undefined;
+    const region =
+      ttsProviderId === 'tencent-tts' ? resolveTTSTencentRegion() : undefined;
+
+    if (ttsProviderId === 'tencent-tts' && (!secretId || !secretKey)) {
+      return apiError(
+        'MISSING_API_KEY',
+        500,
+        'Tencent TTS server credentials are not configured',
+      );
+    }
 
     // Build TTS config
     const config = {
@@ -68,6 +87,9 @@ export async function POST(req: NextRequest) {
       speed: ttsSpeed ?? 1.0,
       apiKey,
       baseUrl,
+      secretId,
+      secretKey,
+      region,
     };
 
     log.info(

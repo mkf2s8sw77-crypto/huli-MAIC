@@ -30,6 +30,7 @@ import {
 import { AlertTriangle } from 'lucide-react';
 import { VisuallyHidden } from 'radix-ui';
 import { DEFAULT_VIEWPORT_SIZE, getViewportRatio } from '@/lib/config/viewport';
+import { DesktopShell, MobileShell, useStageLayout } from '@/components/stage-shell';
 
 /**
  * Stage Component
@@ -72,13 +73,17 @@ export function Stage({
     setViewportRatio(currentViewportRatio);
   }, [currentViewportRatio, currentViewportSize, setViewportRatio, setViewportSize]);
 
-  // Layout state from settings store (persisted via localStorage)
-  const sidebarCollapsed = useSettingsStore((s) => s.sidebarCollapsed);
-  const setSidebarCollapsed = useSettingsStore((s) => s.setSidebarCollapsed);
-  const chatAreaWidth = useSettingsStore((s) => s.chatAreaWidth);
-  const setChatAreaWidth = useSettingsStore((s) => s.setChatAreaWidth);
-  const chatAreaCollapsed = useSettingsStore((s) => s.chatAreaCollapsed);
-  const setChatAreaCollapsed = useSettingsStore((s) => s.setChatAreaCollapsed);
+  // Layout state — routed through useStageLayout so desktop/mobile shells
+  // can be swapped independently in Phase 2 without touching business logic.
+  const {
+    isDesktop,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    chatAreaCollapsed,
+    setChatAreaCollapsed,
+    chatAreaWidth,
+    setChatAreaWidth,
+  } = useStageLayout();
 
   // PlaybackEngine state
   const [engineMode, setEngineMode] = useState<EngineMode>('idle');
@@ -161,6 +166,17 @@ export function Stage({
   const autoStartRef = useRef(false);
   // Discussion buffer-level pause state (distinct from soft-pause which aborts SSE)
   const [isDiscussionPaused, setIsDiscussionPaused] = useState(false);
+
+  // On mobile, opening the floating chat panel from the toolbar should land on
+  // the conversation tab instead of the lecture-notes tab. Wait until the
+  // panel mounts, then switch tabs.
+  useEffect(() => {
+    if (isDesktop || chatAreaCollapsed) return;
+    const rafId = window.requestAnimationFrame(() => {
+      chatAreaRef.current?.switchToTab('chat');
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [chatAreaCollapsed, isDesktop]);
 
   /**
    * Soft-pause: interrupt current agent stream but keep the session active.
@@ -690,274 +706,292 @@ export function Stage({
       }
     : null;
 
-  // Calculate scene viewer height (subtract Header's 80px height)
-  const sceneViewerHeight = (() => {
-    const headerHeight = 80; // Header h-20 = 80px
-    if (mode === 'playback') {
-      return `calc(100% - ${headerHeight + 192}px)`; // Header + Roundtable
-    }
-    return `calc(100% - ${headerHeight}px)`;
-  })();
+  // ── Named layout slots ──────────────────────────────────────────────────────
+  // Stage acts as an orchestration container: it builds each slot element with
+  // all required business props, then hands them to the shell for positioning.
+  // Switching to a MobileShell in Phase 2 only requires changing <DesktopShell>
+  // below — no business logic needs to move.
 
-  return (
-    <div className="flex-1 flex overflow-hidden bg-gray-50 dark:bg-gray-900">
-      {/* Scene Sidebar */}
-      <SceneSidebar
-        collapsed={sidebarCollapsed}
-        onCollapseChange={setSidebarCollapsed}
-        onSceneSelect={gatedSceneSwitch}
-        onRetryOutline={onRetryOutline}
+  const sidebarSlot = (
+    <SceneSidebar
+      collapsed={sidebarCollapsed}
+      onCollapseChange={setSidebarCollapsed}
+      onSceneSelect={gatedSceneSwitch}
+      onRetryOutline={onRetryOutline}
+    />
+  );
+
+  const headerSlot = <Header currentSceneTitle={currentScene?.title || ''} />;
+
+  const canvasSlot = (
+    <CanvasArea
+      currentScene={currentScene}
+      currentSceneIndex={currentSceneIndex}
+      scenesCount={totalScenesCount}
+      viewportRatio={currentViewportRatio}
+      mode={mode}
+      engineState={canvasEngineState}
+      isLiveSession={
+        chatIsStreaming || isTopicPending || engineMode === 'live' || !!chatSessionType
+      }
+      whiteboardOpen={whiteboardOpen}
+      sidebarCollapsed={sidebarCollapsed}
+      chatCollapsed={chatAreaCollapsed}
+      onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+      onToggleChat={() => setChatAreaCollapsed(!chatAreaCollapsed)}
+      onPrevSlide={handlePreviousScene}
+      onNextSlide={handleNextScene}
+      onPlayPause={handlePlayPause}
+      onWhiteboardClose={handleWhiteboardToggle}
+      showStopDiscussion={
+        engineMode === 'live' ||
+        (chatIsStreaming && (chatSessionType === 'qa' || chatSessionType === 'discussion'))
+      }
+      onStopDiscussion={handleStopDiscussion}
+      hideToolbar={mode === 'playback'}
+      isPendingScene={isPendingScene}
+      isGenerationFailed={
+        isPendingScene && failedOutlines.some((f) => f.id === generatingOutlines[0]?.id)
+      }
+      onRetryGeneration={
+        onRetryOutline && generatingOutlines[0]
+          ? () => onRetryOutline(generatingOutlines[0].id)
+          : undefined
+      }
+    />
+  );
+
+  const roundtableSlot =
+    mode === 'playback' ? (
+      <Roundtable
+        mode={mode}
+        initialParticipants={participants}
+        playbackView={playbackView}
+        currentSpeech={liveSpeech}
+        lectureSpeech={lectureSpeech}
+        idleText={firstSpeechText}
+        playbackCompleted={playbackCompleted}
+        discussionRequest={discussionRequest}
+        engineMode={engineMode}
+        isStreaming={chatIsStreaming}
+        sessionType={
+          chatSessionType === 'qa'
+            ? 'qa'
+            : chatSessionType === 'discussion'
+              ? 'discussion'
+              : undefined
+        }
+        speakingAgentId={speakingAgentId}
+        speechProgress={speechProgress}
+        showEndFlash={showEndFlash}
+        endFlashSessionType={endFlashSessionType}
+        thinkingState={thinkingState}
+        isCueUser={isCueUser}
+        isTopicPending={isTopicPending}
+        onMessageSend={(msg) => {
+          // Clear soft-paused state — user is continuing the topic
+          if (isTopicPending) {
+            setIsTopicPending(false);
+            setLiveSpeech(null);
+            setSpeakingAgentId(null);
+          }
+          // User interrupts during playback — handleUserInterrupt triggers
+          // onUserInterrupt callback which already calls sendMessage, so skip
+          // the direct sendMessage below to avoid sending twice.
+          // Include 'paused' because onInputActivate pauses the engine before
+          // the user finishes typing — without this the interrupt position
+          // would never be saved and resuming after QA skips to the next sentence.
+          if (
+            engineRef.current &&
+            (engineMode === 'playing' || engineMode === 'live' || engineMode === 'paused')
+          ) {
+            engineRef.current.handleUserInterrupt(msg);
+          } else {
+            chatAreaRef.current?.sendMessage(msg);
+          }
+          // Auto-switch to chat tab when user sends a message
+          chatAreaRef.current?.switchToTab('chat');
+          setIsCueUser(false);
+          // Immediately mark streaming for synchronized stop button
+          setChatIsStreaming(true);
+          setChatSessionType(chatSessionType || 'qa');
+          // Optimistic thinking: show thinking dots immediately so there's
+          // no blank gap between userMessage expiry and the SSE thinking event.
+          // The real SSE event will overwrite this with the same or updated value.
+          setThinkingState({ stage: 'director' });
+        }}
+        onDiscussionStart={() => {
+          // User clicks "Join" on ProactiveCard
+          engineRef.current?.confirmDiscussion();
+        }}
+        onDiscussionSkip={() => {
+          // User clicks "Skip" on ProactiveCard
+          engineRef.current?.skipDiscussion();
+        }}
+        onStopDiscussion={handleStopDiscussion}
+        onInputActivate={async () => {
+          // Soft-pause QA/Discussion if streaming (opening input = implicit pause)
+          if (chatIsStreaming) {
+            await doSoftPause();
+          }
+          // Also pause playback engine
+          if (engineRef.current && (engineMode === 'playing' || engineMode === 'live')) {
+            engineRef.current.pause();
+          }
+        }}
+        onResumeTopic={doResumeTopic}
+        onPlayPause={handlePlayPause}
+        isDiscussionPaused={isDiscussionPaused}
+        onDiscussionPause={() => {
+          chatAreaRef.current?.pauseActiveLiveBuffer();
+          setIsDiscussionPaused(true);
+        }}
+        onDiscussionResume={() => {
+          chatAreaRef.current?.resumeActiveLiveBuffer();
+          setIsDiscussionPaused(false);
+        }}
+        totalActions={totalActions}
+        currentActionIndex={0}
+        currentSceneIndex={currentSceneIndex}
+        scenesCount={totalScenesCount}
+        whiteboardOpen={whiteboardOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        chatCollapsed={chatAreaCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onToggleChat={() => setChatAreaCollapsed(!chatAreaCollapsed)}
+        onPrevSlide={handlePreviousScene}
+        onNextSlide={handleNextScene}
+        onWhiteboardClose={handleWhiteboardToggle}
       />
+    ) : null;
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
-        {/* Header */}
-        <Header currentSceneTitle={currentScene?.title || ''} />
+  const chatSlot = (
+    <ChatArea
+      ref={chatAreaRef}
+      width={chatAreaWidth}
+      onWidthChange={setChatAreaWidth}
+      collapsed={chatAreaCollapsed}
+      onCollapseChange={setChatAreaCollapsed}
+      activeBubbleId={activeBubbleId}
+      onActiveBubble={(id) => setActiveBubbleId(id)}
+      currentSceneId={currentSceneId}
+      onLiveSpeech={(text, agentId) => {
+        // Capture epoch at call time — discard if scene has changed since
+        const epoch = sceneEpochRef.current;
+        // Use queueMicrotask to let any pending scene-switch reset settle first
+        queueMicrotask(() => {
+          if (sceneEpochRef.current !== epoch) return; // stale — scene changed
+          setLiveSpeech(text);
+          if (agentId !== undefined) {
+            setSpeakingAgentId(agentId);
+          }
+          if (text !== null || agentId) {
+            setChatIsStreaming(true);
+            setChatSessionType(chatAreaRef.current?.getActiveSessionType?.() ?? null);
+            setIsTopicPending(false);
+          } else if (text === null && agentId === null) {
+            setChatIsStreaming(false);
+            // Don't clear chatSessionType here — it's needed by the stop
+            // button when director cues user (cue_user → done → liveSpeech null).
+            // It gets properly cleared in doSessionCleanup and scene change.
+          }
+        });
+      }}
+      onSpeechProgress={(ratio) => {
+        const epoch = sceneEpochRef.current;
+        queueMicrotask(() => {
+          if (sceneEpochRef.current !== epoch) return;
+          setSpeechProgress(ratio);
+        });
+      }}
+      onThinking={(state) => {
+        const epoch = sceneEpochRef.current;
+        queueMicrotask(() => {
+          if (sceneEpochRef.current !== epoch) return;
+          setThinkingState(state);
+        });
+      }}
+      onCueUser={(_fromAgentId, _prompt) => {
+        setIsCueUser(true);
+      }}
+      onStopSession={doSessionCleanup}
+    />
+  );
 
-        {/* Canvas Area */}
-        <div
-          className="overflow-hidden relative flex-1 min-h-0 isolate"
-          style={{
-            height: sceneViewerHeight,
-          }}
-          suppressHydrationWarning
-        >
-          <CanvasArea
-            currentScene={currentScene}
-            currentSceneIndex={currentSceneIndex}
-            scenesCount={totalScenesCount}
-            viewportRatio={currentViewportRatio}
-            mode={mode}
-            engineState={canvasEngineState}
-            isLiveSession={
-              chatIsStreaming || isTopicPending || engineMode === 'live' || !!chatSessionType
-            }
-            whiteboardOpen={whiteboardOpen}
-            sidebarCollapsed={sidebarCollapsed}
-            chatCollapsed={chatAreaCollapsed}
-            onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-            onToggleChat={() => setChatAreaCollapsed(!chatAreaCollapsed)}
-            onPrevSlide={handlePreviousScene}
-            onNextSlide={handleNextScene}
-            onPlayPause={handlePlayPause}
-            onWhiteboardClose={handleWhiteboardToggle}
-            showStopDiscussion={
-              engineMode === 'live' ||
-              (chatIsStreaming && (chatSessionType === 'qa' || chatSessionType === 'discussion'))
-            }
-            onStopDiscussion={handleStopDiscussion}
-            hideToolbar={mode === 'playback'}
-            isPendingScene={isPendingScene}
-            isGenerationFailed={
-              isPendingScene && failedOutlines.some((f) => f.id === generatingOutlines[0]?.id)
-            }
-            onRetryGeneration={
-              onRetryOutline && generatingOutlines[0]
-                ? () => onRetryOutline(generatingOutlines[0].id)
-                : undefined
-            }
-          />
+  const dialogSlot = (
+    <AlertDialog
+      open={!!pendingSceneId}
+      onOpenChange={(open) => {
+        if (!open) cancelSceneSwitch();
+      }}
+    >
+      <AlertDialogContent className="max-w-sm rounded-2xl p-0 overflow-hidden border-0 shadow-[0_25px_60px_-12px_rgba(0,0,0,0.15)] dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5)]">
+        <VisuallyHidden.Root>
+          <AlertDialogTitle>{t('stage.confirmSwitchTitle')}</AlertDialogTitle>
+        </VisuallyHidden.Root>
+        {/* Top accent bar */}
+        <div className="h-1 bg-gradient-to-r from-amber-400 via-orange-400 to-red-400" />
+
+        <div className="px-6 pt-5 pb-2 flex flex-col items-center text-center">
+          {/* Icon */}
+          <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center mb-4 ring-1 ring-amber-200/50 dark:ring-amber-700/30">
+            <AlertTriangle className="w-6 h-6 text-amber-500 dark:text-amber-400" />
+          </div>
+          {/* Title */}
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 mb-1.5">
+            {t('stage.confirmSwitchTitle')}
+          </h3>
+          {/* Description */}
+          <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+            {t('stage.confirmSwitchMessage')}
+          </p>
         </div>
 
-        {/* Roundtable Area */}
-        {mode === 'playback' && (
-          <Roundtable
-            mode={mode}
-            initialParticipants={participants}
-            playbackView={playbackView}
-            currentSpeech={liveSpeech}
-            lectureSpeech={lectureSpeech}
-            idleText={firstSpeechText}
-            playbackCompleted={playbackCompleted}
-            discussionRequest={discussionRequest}
-            engineMode={engineMode}
-            isStreaming={chatIsStreaming}
-            sessionType={
-              chatSessionType === 'qa'
-                ? 'qa'
-                : chatSessionType === 'discussion'
-                  ? 'discussion'
-                  : undefined
-            }
-            speakingAgentId={speakingAgentId}
-            speechProgress={speechProgress}
-            showEndFlash={showEndFlash}
-            endFlashSessionType={endFlashSessionType}
-            thinkingState={thinkingState}
-            isCueUser={isCueUser}
-            isTopicPending={isTopicPending}
-            onMessageSend={(msg) => {
-              // Clear soft-paused state — user is continuing the topic
-              if (isTopicPending) {
-                setIsTopicPending(false);
-                setLiveSpeech(null);
-                setSpeakingAgentId(null);
-              }
-              // User interrupts during playback — handleUserInterrupt triggers
-              // onUserInterrupt callback which already calls sendMessage, so skip
-              // the direct sendMessage below to avoid sending twice.
-              // Include 'paused' because onInputActivate pauses the engine before
-              // the user finishes typing — without this the interrupt position
-              // would never be saved and resuming after QA skips to the next sentence.
-              if (
-                engineRef.current &&
-                (engineMode === 'playing' || engineMode === 'live' || engineMode === 'paused')
-              ) {
-                engineRef.current.handleUserInterrupt(msg);
-              } else {
-                chatAreaRef.current?.sendMessage(msg);
-              }
-              // Auto-switch to chat tab when user sends a message
-              chatAreaRef.current?.switchToTab('chat');
-              setIsCueUser(false);
-              // Immediately mark streaming for synchronized stop button
-              setChatIsStreaming(true);
-              setChatSessionType(chatSessionType || 'qa');
-              // Optimistic thinking: show thinking dots immediately so there's
-              // no blank gap between userMessage expiry and the SSE thinking event.
-              // The real SSE event will overwrite this with the same or updated value.
-              setThinkingState({ stage: 'director' });
-            }}
-            onDiscussionStart={() => {
-              // User clicks "Join" on ProactiveCard
-              engineRef.current?.confirmDiscussion();
-            }}
-            onDiscussionSkip={() => {
-              // User clicks "Skip" on ProactiveCard
-              engineRef.current?.skipDiscussion();
-            }}
-            onStopDiscussion={handleStopDiscussion}
-            onInputActivate={async () => {
-              // Soft-pause QA/Discussion if streaming (opening input = implicit pause)
-              if (chatIsStreaming) {
-                await doSoftPause();
-              }
-              // Also pause playback engine
-              if (engineRef.current && (engineMode === 'playing' || engineMode === 'live')) {
-                engineRef.current.pause();
-              }
-            }}
-            onResumeTopic={doResumeTopic}
-            onPlayPause={handlePlayPause}
-            isDiscussionPaused={isDiscussionPaused}
-            onDiscussionPause={() => {
-              chatAreaRef.current?.pauseActiveLiveBuffer();
-              setIsDiscussionPaused(true);
-            }}
-            onDiscussionResume={() => {
-              chatAreaRef.current?.resumeActiveLiveBuffer();
-              setIsDiscussionPaused(false);
-            }}
-            totalActions={totalActions}
-            currentActionIndex={0}
-            currentSceneIndex={currentSceneIndex}
-            scenesCount={totalScenesCount}
-            whiteboardOpen={whiteboardOpen}
-            sidebarCollapsed={sidebarCollapsed}
-            chatCollapsed={chatAreaCollapsed}
-            onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-            onToggleChat={() => setChatAreaCollapsed(!chatAreaCollapsed)}
-            onPrevSlide={handlePreviousScene}
-            onNextSlide={handleNextScene}
-            onWhiteboardClose={handleWhiteboardToggle}
-          />
-        )}
-      </div>
+        <AlertDialogFooter className="px-6 pb-5 pt-3 flex-row gap-3">
+          <AlertDialogCancel onClick={cancelSceneSwitch} className="flex-1 rounded-xl">
+            {t('common.cancel')}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={confirmSceneSwitch}
+            className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white border-0 shadow-md shadow-amber-200/50 dark:shadow-amber-900/30"
+          >
+            {t('common.confirm')}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 
-      {/* Chat Area */}
-      <ChatArea
-        ref={chatAreaRef}
-        width={chatAreaWidth}
-        onWidthChange={setChatAreaWidth}
-        collapsed={chatAreaCollapsed}
-        onCollapseChange={setChatAreaCollapsed}
-        activeBubbleId={activeBubbleId}
-        onActiveBubble={(id) => setActiveBubbleId(id)}
-        currentSceneId={currentSceneId}
-        onLiveSpeech={(text, agentId) => {
-          // Capture epoch at call time — discard if scene has changed since
-          const epoch = sceneEpochRef.current;
-          // Use queueMicrotask to let any pending scene-switch reset settle first
-          queueMicrotask(() => {
-            if (sceneEpochRef.current !== epoch) return; // stale — scene changed
-            setLiveSpeech(text);
-            if (agentId !== undefined) {
-              setSpeakingAgentId(agentId);
-            }
-            if (text !== null || agentId) {
-              setChatIsStreaming(true);
-              setChatSessionType(chatAreaRef.current?.getActiveSessionType?.() ?? null);
-              setIsTopicPending(false);
-            } else if (text === null && agentId === null) {
-              setChatIsStreaming(false);
-              // Don't clear chatSessionType here — it's needed by the stop
-              // button when director cues user (cue_user → done → liveSpeech null).
-              // It gets properly cleared in doSessionCleanup and scene change.
-            }
-          });
-        }}
-        onSpeechProgress={(ratio) => {
-          const epoch = sceneEpochRef.current;
-          queueMicrotask(() => {
-            if (sceneEpochRef.current !== epoch) return;
-            setSpeechProgress(ratio);
-          });
-        }}
-        onThinking={(state) => {
-          const epoch = sceneEpochRef.current;
-          queueMicrotask(() => {
-            if (sceneEpochRef.current !== epoch) return;
-            setThinkingState(state);
-          });
-        }}
-        onCueUser={(_fromAgentId, _prompt) => {
-          setIsCueUser(true);
-        }}
-        onStopSession={doSessionCleanup}
+  // Phase 2: pick shell based on viewport width.
+  // DesktopShell: three-column flex layout (sidebar | canvas | chat).
+  // MobileShell: single-column with sidebar/chat as absolute overlays.
+  if (!isDesktop) {
+    return (
+      <MobileShell
+        hasRoundtable={mode === 'playback'}
+        sidebar={sidebarSlot}
+        header={headerSlot}
+        canvas={canvasSlot}
+        roundtable={roundtableSlot}
+        chat={chatSlot}
+        overlay={dialogSlot}
+        sidebarOpen={!sidebarCollapsed}
+        chatOpen={!chatAreaCollapsed}
+        onCloseSidebar={() => setSidebarCollapsed(true)}
+        onCloseChat={() => setChatAreaCollapsed(true)}
       />
+    );
+  }
 
-      {/* Scene switch confirmation dialog */}
-      <AlertDialog
-        open={!!pendingSceneId}
-        onOpenChange={(open) => {
-          if (!open) cancelSceneSwitch();
-        }}
-      >
-        <AlertDialogContent className="max-w-sm rounded-2xl p-0 overflow-hidden border-0 shadow-[0_25px_60px_-12px_rgba(0,0,0,0.15)] dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5)]">
-          <VisuallyHidden.Root>
-            <AlertDialogTitle>{t('stage.confirmSwitchTitle')}</AlertDialogTitle>
-          </VisuallyHidden.Root>
-          {/* Top accent bar */}
-          <div className="h-1 bg-gradient-to-r from-amber-400 via-orange-400 to-red-400" />
-
-          <div className="px-6 pt-5 pb-2 flex flex-col items-center text-center">
-            {/* Icon */}
-            <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center mb-4 ring-1 ring-amber-200/50 dark:ring-amber-700/30">
-              <AlertTriangle className="w-6 h-6 text-amber-500 dark:text-amber-400" />
-            </div>
-            {/* Title */}
-            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 mb-1.5">
-              {t('stage.confirmSwitchTitle')}
-            </h3>
-            {/* Description */}
-            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-              {t('stage.confirmSwitchMessage')}
-            </p>
-          </div>
-
-          <AlertDialogFooter className="px-6 pb-5 pt-3 flex-row gap-3">
-            <AlertDialogCancel onClick={cancelSceneSwitch} className="flex-1 rounded-xl">
-              {t('common.cancel')}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmSceneSwitch}
-              className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white border-0 shadow-md shadow-amber-200/50 dark:shadow-amber-900/30"
-            >
-              {t('common.confirm')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+  return (
+    <DesktopShell
+      hasRoundtable={mode === 'playback'}
+      sidebar={sidebarSlot}
+      header={headerSlot}
+      canvas={canvasSlot}
+      roundtable={roundtableSlot}
+      chat={chatSlot}
+      overlay={dialogSlot}
+    />
   );
 }

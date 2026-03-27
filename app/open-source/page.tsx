@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import {
   LICENSE_URL,
   SOURCE_CODE_URL,
   UPSTREAM_SOURCE_URL,
 } from '@/lib/constants/open-source';
+import { getAppHomeHref } from '@/lib/utils/navigation';
 
 export const metadata: Metadata = {
   title: '开源说明',
@@ -71,12 +71,12 @@ export default function OpenSourceNoticePage() {
         </section>
 
         <div className="mt-8">
-          <Link
-            href="/"
+          <a
+            href={getAppHomeHref()}
             className="inline-flex items-center rounded-full border border-border/60 px-4 py-2 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
           >
             返回首页
-          </Link>
+          </a>
         </div>
       </div>
     </main>

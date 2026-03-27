@@ -1,16 +1,13 @@
 // lib/generation/portrait-template-engine.ts
 
 /**
- * Portrait Template Engine
+ * Portrait Template Engine v2
  *
- * 将 PortraitContentManifest 渲染为 PPT 元素列表。
- * 程序完全控制坐标，AI 只提供内容。
- *
- * 渲染原则：
- * - 所有坐标都按 canvasWidth/canvasHeight 的比例计算，不硬编码 1000×1333
- * - 文本 fitting 通过 estimateTextHeight() 动态调整块高度
- * - 下半区填满：若内容不足 84% 画布高度，均匀扩展各块
- * - 防溢出：若内容超出 canvas 底部，截去最后一张卡片
+ * 目标：
+ * - 稳定的视觉系统：配色由程序控制，不再依赖 AI 给主题色
+ * - 卡片内文本真正垂直对齐：优先使用 ShapeElement.text，而不是 shape + text 叠层
+ * - 统一的卡片语言：圆角面板、轻描边、柔和底色、清晰层级
+ * - 保持 thin fork：只改竖版模板引擎，不碰横版和 quiz UI
  */
 
 import type { GeneratedSlideData } from './pipeline-types';
@@ -19,584 +16,1008 @@ import type {
   PortraitCard,
   PortraitHeroBlock,
 } from './portrait-content-schema';
-
-// ── Types ────────────────────────────────────────────────────────────────────
+import type { PPTElementOutline, PPTElementShadow, ShapeTextAlign } from '@/lib/types/slides';
 
 type SlideElement = GeneratedSlideData['elements'][number];
 
-/** 图片信息，供模板引擎计算图片槽位高度 */
-export interface ImageInfo {
-  id: string;
-  /** 宽高比 width/height，不知道时传 16/9 */
-  aspectRatio: number;
+type Palette = {
+  headerBg: string;
+  headerText: string;
+  headerSubText: string;
+  heroBg: string;
+  heroOutline: string;
+  heroLabel: string;
+  heroBody: string;
+  cardBg: string;
+  cardAltBg: string;
+  cardOutline: string;
+  cardLabel: string;
+  cardBody: string;
+  accentRail: string;
+  accentRailAlt: string;
+  footerBg: string;
+  footerOutline: string;
+  footerText: string;
+  badgeBg: string;
+  badgeText: string;
+  vsBg: string;
+  vsText: string;
+};
+
+type PanelBlock = {
+  markup: string;
+  fill: string;
+  outlineColor: string;
+  naturalH: number;
+  minH: number;
+  align?: ShapeTextAlign;
+  railColor?: string;
+  shadow?: PPTElementShadow;
+};
+
+interface StackResult {
+  elements: SlideElement[];
+  truncated: boolean;
 }
 
-// ── Layout Constants ─────────────────────────────────────────────────────────
+const PAGE_MARGIN = 52;
+const TITLE_TOP = 44;
+const TITLE_HEIGHT = 136;
+const CONTENT_START = TITLE_TOP + TITLE_HEIGHT + 22;
+const CARD_GAP = 18;
+const HERO_GAP = 22;
+const FOOTER_RESERVE = 176;
 
-const LEFT_MARGIN = 60;
-const TITLE_TOP = 50;
-const TITLE_HEIGHT = 148;
-/** 内容区起始 Y 坐标（标题栏底部 + 小间距） */
-const CONTENT_START = 222;
-const HERO_GAP = 20; // 标题栏与 hero 块之间的间距
-const CARD_GAP = 16; // 卡片之间的间距
+const TITLE_FONT = 60;
+const TITLE_SUB_FONT = 28;
+const HERO_LABEL_FONT = 28;
+const HERO_BODY_FONT = 42;
+const CARD_LABEL_FONT = 36;
+const CARD_BODY_FONT = 32;
+const FOOTER_FONT = 30;
+const VS_FONT = 26;
+const STEP_BADGE_FONT = 26;
 
-const TITLE_FONT = 64;
-const HERO_FONT = 48;
-const HERO_LABEL_FONT = 40;
-const CARD_FONT = 44;
-const CARD_LABEL_FONT = 40;
-const FOOTER_FONT = 40;
+const MIN_HERO_HEIGHT = 188;
+const MIN_CARD_HEIGHT = 126;
+const MIN_COMPARE_HEIGHT = 188;
+const MIN_STEP_HEIGHT = 120;
 
-const DARK_TEXT = '#1f2937';
-const CARD_BG_DEFAULT = '#f8fafc';
-const FOOTER_BG = '#f3f4f6';
+const TEXT_DARK = '#1f2937';
+const TEXT_MUTED = '#475569';
+const RADIUS = 14;
+const RAIL_WIDTH = 10;
+const RAIL_INSET = 14;
+const PANEL_PAD_X = 34;
+const PANEL_PAD_Y = 28;
+const HERO_SHADOW: PPTElementShadow = { h: 0, v: 8, blur: 20, color: 'rgba(15,23,42,0.08)' };
+const FOOTER_SHADOW: PPTElementShadow = { h: 0, v: 6, blur: 16, color: 'rgba(15,23,42,0.06)' };
 
-const MIN_HERO_HEIGHT = 160;
-const MIN_CARD_HEIGHT = 120;
-const FOOTER_RESERVE = 190; // 底部摘要区预留高度
+const PALETTE_BY_ARCHETYPE: Record<PortraitContentManifest['archetype'], Palette> = {
+  lead: {
+    headerBg: '#173B7A',
+    headerText: '#ffffff',
+    headerSubText: 'rgba(255,255,255,0.84)',
+    heroBg: '#EEF4FF',
+    heroOutline: '#C9DBFF',
+    heroLabel: '#2B5FD1',
+    heroBody: '#173B7A',
+    cardBg: '#FFFFFF',
+    cardAltBg: '#F5F9FF',
+    cardOutline: '#D9E6FB',
+    cardLabel: '#244AA8',
+    cardBody: TEXT_MUTED,
+    accentRail: '#2B5FD1',
+    accentRailAlt: '#4B7BE5',
+    footerBg: '#EEF4FF',
+    footerOutline: '#D7E3F8',
+    footerText: '#173B7A',
+    badgeBg: '#173B7A',
+    badgeText: '#ffffff',
+    vsBg: '#E9F0FF',
+    vsText: '#244AA8',
+  },
+  concept: {
+    headerBg: '#1E4DA8',
+    headerText: '#ffffff',
+    headerSubText: 'rgba(255,255,255,0.84)',
+    heroBg: '#EDF4FF',
+    heroOutline: '#CADCFF',
+    heroLabel: '#2A63D4',
+    heroBody: '#1E3A8A',
+    cardBg: '#FFFFFF',
+    cardAltBg: '#F6FAFF',
+    cardOutline: '#DCE7F8',
+    cardLabel: '#2451BA',
+    cardBody: TEXT_MUTED,
+    accentRail: '#2A63D4',
+    accentRailAlt: '#5683E8',
+    footerBg: '#EEF4FF',
+    footerOutline: '#D8E5F7',
+    footerText: '#1E3A8A',
+    badgeBg: '#1E4DA8',
+    badgeText: '#ffffff',
+    vsBg: '#E8F0FF',
+    vsText: '#1E4DA8',
+  },
+  compare: {
+    headerBg: '#274690',
+    headerText: '#ffffff',
+    headerSubText: 'rgba(255,255,255,0.84)',
+    heroBg: '#EDF4FF',
+    heroOutline: '#D8E5FA',
+    heroLabel: '#245BD1',
+    heroBody: '#1E3A8A',
+    cardBg: '#FFF8EA',
+    cardAltBg: '#FFFFFF',
+    cardOutline: '#E9E2D5',
+    cardLabel: '#A55A05',
+    cardBody: TEXT_MUTED,
+    accentRail: '#2563EB',
+    accentRailAlt: '#D97706',
+    footerBg: '#EEF4FF',
+    footerOutline: '#DBE3F3',
+    footerText: '#274690',
+    badgeBg: '#274690',
+    badgeText: '#ffffff',
+    vsBg: '#EEF2FF',
+    vsText: '#274690',
+  },
+  steps: {
+    headerBg: '#0F766E',
+    headerText: '#ffffff',
+    headerSubText: 'rgba(255,255,255,0.84)',
+    heroBg: '#E8FBF6',
+    heroOutline: '#CFEDE4',
+    heroLabel: '#0F766E',
+    heroBody: '#115E59',
+    cardBg: '#FFFFFF',
+    cardAltBg: '#F2FCF9',
+    cardOutline: '#DCEFE8',
+    cardLabel: '#0F766E',
+    cardBody: TEXT_MUTED,
+    accentRail: '#14B8A6',
+    accentRailAlt: '#0F766E',
+    footerBg: '#ECFDF8',
+    footerOutline: '#D7EFE8',
+    footerText: '#115E59',
+    badgeBg: '#0F766E',
+    badgeText: '#ffffff',
+    vsBg: '#E7F9F5',
+    vsText: '#0F766E',
+  },
+  tip: {
+    headerBg: '#B45309',
+    headerText: '#ffffff',
+    headerSubText: 'rgba(255,255,255,0.84)',
+    heroBg: '#FFF6E7',
+    heroOutline: '#F4DFC0',
+    heroLabel: '#C26D08',
+    heroBody: '#9A3412',
+    cardBg: '#FFFFFF',
+    cardAltBg: '#FFF9F0',
+    cardOutline: '#EEE3D1',
+    cardLabel: '#C26D08',
+    cardBody: TEXT_MUTED,
+    accentRail: '#F59E0B',
+    accentRailAlt: '#D97706',
+    footerBg: '#FFF4E5',
+    footerOutline: '#F2DEC0',
+    footerText: '#9A3412',
+    badgeBg: '#B45309',
+    badgeText: '#ffffff',
+    vsBg: '#FFF3DC',
+    vsText: '#B45309',
+  },
+  summary: {
+    headerBg: '#5B21B6',
+    headerText: '#ffffff',
+    headerSubText: 'rgba(255,255,255,0.84)',
+    heroBg: '#F5EEFF',
+    heroOutline: '#E5D7FF',
+    heroLabel: '#7C3AED',
+    heroBody: '#5B21B6',
+    cardBg: '#FFFFFF',
+    cardAltBg: '#FAF6FF',
+    cardOutline: '#EADFF8',
+    cardLabel: '#6D28D9',
+    cardBody: TEXT_MUTED,
+    accentRail: '#8B5CF6',
+    accentRailAlt: '#7C3AED',
+    footerBg: '#F6F0FF',
+    footerOutline: '#E4D9F8',
+    footerText: '#5B21B6',
+    badgeBg: '#5B21B6',
+    badgeText: '#ffffff',
+    vsBg: '#F3EBFF',
+    vsText: '#6D28D9',
+  },
+};
 
-// ── Utilities ────────────────────────────────────────────────────────────────
-
-/** canvas 内容可用宽度（减去左右 margin） */
-function cw(canvasWidth: number): number {
-  return canvasWidth - LEFT_MARGIN * 2;
+function panelWidth(canvasWidth: number): number {
+  return canvasWidth - PAGE_MARGIN * 2;
 }
 
-function escapeHtml(t: string): string {
-  return t
+function escapeHtml(text: string): string {
+  return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
 
-/** 去除 HTML 标签，用于文本高度估算 */
-export function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/gi, ' ').trim();
+function roundedRectPath(radius = RADIUS): string {
+  const r = Math.max(0, Math.min(50, radius));
+  return `M ${r} 0 H ${100 - r} Q 100 0 100 ${r} V ${100 - r} Q 100 100 ${100 - r} 100 H ${r} Q 0 100 0 ${100 - r} V ${r} Q 0 0 ${r} 0 Z`;
 }
 
-/**
- * 估算文本在给定容器内渲染后的高度。
- *
- * 算法：
- * 1. 去除 HTML 标签取纯文本
- * 2. 中文字符宽 ≈ fontSize × 1.0，英文字符宽 ≈ fontSize × 0.6（混排加权平均）
- * 3. 每行字符数 = floor(usableWidth / avgCharWidth)
- * 4. 行数 = ceil(textLength / charsPerLine)
- * 5. 高度 = lines × fontSize × lineHeightRatio + paddingV × 2
- *
- * 故意保守（略高估），避免真实渲染时溢出。
- */
-export function estimateTextHeight(
-  textOrHtml: string,
+function calcAvgCharWidth(text: string, fontSize: number): number {
+  const chineseCount = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+  const otherCount = text.length - chineseCount;
+  return (chineseCount * fontSize + otherCount * fontSize * 0.58) / Math.max(1, text.length);
+}
+
+function estimateParagraphHeight(
+  text: string,
   fontSize: number,
-  containerWidth: number,
-  lineHeightRatio = 1.45,
-  paddingV = 20,
-  paddingH = 20,
+  usableWidth: number,
+  lineHeight = 1.24,
 ): number {
-  const text = textOrHtml.includes('<') ? stripHtml(textOrHtml) : textOrHtml;
-  if (!text) return Math.ceil(fontSize * lineHeightRatio) + paddingV * 2;
-  const usableWidth = Math.max(1, containerWidth - paddingH * 2);
-  const chCnt = (text.match(/[\u4e00-\u9fff]/g) || []).length;
-  const otherCnt = text.length - chCnt;
-  const avgCharW = (chCnt * fontSize + otherCnt * fontSize * 0.6) / text.length;
-  const charsPerLine = Math.max(1, Math.floor(usableWidth / avgCharW));
+  if (!text.trim()) return Math.ceil(fontSize * lineHeight);
+  const avgCharWidth = calcAvgCharWidth(text, fontSize);
+  const charsPerLine = Math.max(1, Math.floor(usableWidth / Math.max(1, avgCharWidth)));
   const lines = Math.ceil(text.length / charsPerLine);
-  return Math.ceil(lines * fontSize * lineHeightRatio) + paddingV * 2;
+  return Math.ceil(lines * fontSize * lineHeight);
 }
 
-// ── Element Builders ─────────────────────────────────────────────────────────
+function estimateRichBlockHeight(
+  parts: Array<{ text: string; fontSize: number; gapAfter?: number; lineHeight?: number }>,
+  containerWidth: number,
+  paddingX = PANEL_PAD_X,
+  paddingY = PANEL_PAD_Y,
+): number {
+  const usableWidth = Math.max(1, containerWidth - paddingX * 2);
+  const textHeight = parts.reduce((sum, part) => {
+    if (!part.text.trim()) return sum;
+    return (
+      sum +
+      estimateParagraphHeight(part.text, part.fontSize, usableWidth, part.lineHeight ?? 1.24) +
+      (part.gapAfter ?? 0)
+    );
+  }, 0);
+  return Math.ceil(textHeight + paddingY * 2);
+}
 
-function makeShape(
-  left: number,
-  top: number,
-  width: number,
-  height: number,
-  fill: string,
-): SlideElement {
+function chooseVerticalAlign(naturalHeight: number, boxHeight: number): ShapeTextAlign {
+  return naturalHeight > boxHeight * 0.78 ? 'top' : 'middle';
+}
+
+function buildParagraph(
+  text: string,
+  {
+    size,
+    color,
+    weight = 400,
+    align = 'left',
+    lineHeight = 1.24,
+    marginTop = 0,
+  }: {
+    size: number;
+    color: string;
+    weight?: number;
+    align?: 'left' | 'center';
+    lineHeight?: number;
+    marginTop?: number;
+  },
+): string {
+  return `<p style="margin: ${marginTop}px 0 0 0; font-size: ${size}px; color: ${color}; font-weight: ${weight}; text-align: ${align}; line-height: ${lineHeight};">${escapeHtml(text)}</p>`;
+}
+
+function wrapBlock(inner: string, padding = '8px 12px'): string {
+  return `<div style="padding: ${padding};">${inner}</div>`;
+}
+
+function heroMarkup(hero: PortraitHeroBlock, palette: Palette): string {
+  const parts: string[] = [];
+  if (hero.label?.trim()) {
+    parts.push(
+      buildParagraph(hero.label, {
+        size: HERO_LABEL_FONT,
+        color: palette.heroLabel,
+        weight: 700,
+        lineHeight: 1.18,
+      }),
+    );
+  }
+  if (hero.body.trim()) {
+    parts.push(
+      buildParagraph(hero.body, {
+        size: HERO_BODY_FONT,
+        color: palette.heroBody,
+        weight: 650,
+        lineHeight: 1.2,
+        marginTop: parts.length > 0 ? 10 : 0,
+      }),
+    );
+  }
+  return wrapBlock(parts.join(''), '10px 14px');
+}
+
+function supportMarkup(card: PortraitCard, palette: Palette): string {
+  const parts: string[] = [];
+  if (card.label?.trim()) {
+    parts.push(
+      buildParagraph(card.label, {
+        size: CARD_LABEL_FONT,
+        color: palette.cardLabel,
+        weight: 700,
+        lineHeight: 1.18,
+      }),
+    );
+  }
+  if (card.body.trim()) {
+    parts.push(
+      buildParagraph(card.body, {
+        size: CARD_BODY_FONT,
+        color: palette.cardBody,
+        weight: 500,
+        lineHeight: 1.24,
+        marginTop: parts.length > 0 ? 8 : 0,
+      }),
+    );
+  }
+  return wrapBlock(parts.join(''), '8px 14px 8px 26px');
+}
+
+function footerMarkup(text: string, palette: Palette): string {
+  return wrapBlock(
+    buildParagraph(text, {
+      size: FOOTER_FONT,
+      color: palette.footerText,
+      weight: 600,
+      lineHeight: 1.2,
+    }),
+    '10px 14px',
+  );
+}
+
+function makeRoundedPanel({
+  left,
+  top,
+  width,
+  height,
+  fill,
+  outlineColor,
+  markup,
+  defaultColor = TEXT_DARK,
+  align = 'middle',
+  shadow,
+}: {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  fill: string;
+  outlineColor: string;
+  markup: string;
+  defaultColor?: string;
+  align?: ShapeTextAlign;
+  shadow?: PPTElementShadow;
+}): SlideElement {
   return {
     type: 'shape',
     left,
     top,
     width,
     height,
-    path: 'M 0 0 L 1 0 L 1 1 L 0 1 Z',
-    viewBox: [1, 1],
-    fill,
+    path: roundedRectPath(),
+    viewBox: [100, 100],
     fixedRatio: false,
+    fill,
+    outline: {
+      style: 'solid',
+      width: 1,
+      color: outlineColor,
+    } satisfies PPTElementOutline,
+    shadow,
+    text: {
+      content: markup,
+      defaultFontName: '',
+      defaultColor,
+      align,
+      lineHeight: 1.24,
+      paragraphSpace: 0,
+    },
   };
 }
 
-function makeText(
-  left: number,
-  top: number,
-  width: number,
-  height: number,
-  content: string,
-  defaultColor = DARK_TEXT,
-): SlideElement {
+function makeRail({
+  left,
+  top,
+  height,
+  color,
+}: {
+  left: number;
+  top: number;
+  height: number;
+  color: string;
+}): SlideElement {
   return {
-    type: 'text',
+    type: 'shape',
     left,
     top,
-    width,
+    width: RAIL_WIDTH,
     height,
-    content,
-    defaultFontName: '',
-    defaultColor,
+    path: roundedRectPath(50),
+    viewBox: [100, 100],
+    fixedRatio: false,
+    fill: color,
   };
 }
 
-function makeImage(
-  left: number,
-  top: number,
-  width: number,
-  height: number,
-  src: string,
-): SlideElement {
-  return { type: 'image', left, top, width, height, src, fixedRatio: true };
+function makeBadge({
+  left,
+  top,
+  size,
+  fill,
+  color,
+  text,
+}: {
+  left: number;
+  top: number;
+  size: number;
+  fill: string;
+  color: string;
+  text: string;
+}): SlideElement {
+  return {
+    type: 'shape',
+    left,
+    top,
+    width: size,
+    height: size,
+    path: roundedRectPath(50),
+    viewBox: [100, 100],
+    fixedRatio: true,
+    fill,
+    text: {
+      content: buildParagraph(text, {
+        size: STEP_BADGE_FONT,
+        color,
+        weight: 700,
+        align: 'center',
+        lineHeight: 1,
+      }),
+      defaultFontName: '',
+      defaultColor: color,
+      align: 'middle',
+      lineHeight: 1,
+      paragraphSpace: 0,
+    },
+  };
 }
 
-// ── Title Bar ────────────────────────────────────────────────────────────────
-
-/** 渲染标题栏：accentColor 底色 ShapeElement + 白色标题文字 TextElement */
-function renderTitleBar(
-  manifest: PortraitContentManifest,
-  canvasWidth: number,
-): SlideElement[] {
-  const w = cw(canvasWidth);
-  const parts: string[] = [
-    `<p style="font-size: ${TITLE_FONT}px; color: #ffffff; font-weight: bold; text-align: left;">${escapeHtml(manifest.title)}</p>`,
+function renderTitleBar(manifest: PortraitContentManifest, canvasWidth: number): SlideElement[] {
+  const palette = PALETTE_BY_ARCHETYPE[manifest.archetype];
+  const width = panelWidth(canvasWidth);
+  const parts = [
+    buildParagraph(manifest.title, {
+      size: TITLE_FONT,
+      color: palette.headerText,
+      weight: 750,
+      lineHeight: 1.12,
+    }),
   ];
-  if (manifest.titleSub) {
+
+  if (manifest.titleSub?.trim()) {
     parts.push(
-      `<p style="font-size: 40px; color: rgba(255,255,255,0.85); text-align: left;">${escapeHtml(manifest.titleSub)}</p>`,
+      buildParagraph(manifest.titleSub, {
+        size: TITLE_SUB_FONT,
+        color: palette.headerSubText,
+        weight: 500,
+        lineHeight: 1.18,
+        marginTop: 8,
+      }),
     );
   }
+
   return [
-    makeShape(0, TITLE_TOP, canvasWidth, TITLE_HEIGHT, manifest.accentColor),
-    makeText(LEFT_MARGIN, TITLE_TOP, w, TITLE_HEIGHT, parts.join(''), '#ffffff'),
+    makeRoundedPanel({
+      left: PAGE_MARGIN,
+      top: TITLE_TOP,
+      width,
+      height: TITLE_HEIGHT,
+      fill: palette.headerBg,
+      outlineColor: palette.headerBg,
+      markup: wrapBlock(parts.join(''), '10px 16px'),
+      defaultColor: palette.headerText,
+      align: 'middle',
+      shadow: HERO_SHADOW,
+    }),
   ];
 }
-
-// ── Block Content HTML Builders ───────────────────────────────────────────────
-
-function heroHtml(hero: PortraitHeroBlock, accentColor: string): string {
-  const parts: string[] = [];
-  if (hero.label) {
-    parts.push(
-      `<p style="font-size: ${HERO_LABEL_FONT}px; color: ${accentColor}; font-weight: bold; text-align: left;">${escapeHtml(hero.label)}</p>`,
-    );
-  }
-  parts.push(
-    `<p style="font-size: ${HERO_FONT}px; color: ${DARK_TEXT}; text-align: left;">${escapeHtml(hero.body)}</p>`,
-  );
-  return parts.join('');
-}
-
-function cardHtml(card: PortraitCard, accentColor: string): string {
-  const parts: string[] = [];
-  if (card.label) {
-    parts.push(
-      `<p style="font-size: ${CARD_LABEL_FONT}px; color: ${accentColor}; font-weight: bold; text-align: left;">${escapeHtml(card.label)}</p>`,
-    );
-  }
-  parts.push(
-    `<p style="font-size: ${CARD_FONT}px; color: ${DARK_TEXT}; text-align: left;">${escapeHtml(card.body)}</p>`,
-  );
-  return parts.join('');
-}
-
-// ── Block Height Calculators ──────────────────────────────────────────────────
 
 function calcHeroHeight(hero: PortraitHeroBlock, width: number, minH: number): number {
-  const labelH = hero.label ? estimateTextHeight(hero.label, HERO_LABEL_FONT, width) : 0;
-  const bodyH = estimateTextHeight(hero.body, HERO_FONT, width);
-  return Math.max(minH, labelH + bodyH);
+  return Math.max(
+    minH,
+    estimateRichBlockHeight(
+      [
+        ...(hero.label?.trim()
+          ? [{ text: hero.label, fontSize: HERO_LABEL_FONT, gapAfter: 10, lineHeight: 1.18 }]
+          : []),
+        { text: hero.body, fontSize: HERO_BODY_FONT, lineHeight: 1.2 },
+      ],
+      width,
+      42,
+      34,
+    ),
+  );
 }
 
 function calcCardHeight(card: PortraitCard, width: number, minH = MIN_CARD_HEIGHT): number {
-  const labelH = card.label ? estimateTextHeight(card.label, CARD_LABEL_FONT, width) : 0;
-  const bodyH = estimateTextHeight(card.body, CARD_FONT, width);
-  return Math.max(minH, labelH + bodyH);
+  return Math.max(
+    minH,
+    estimateRichBlockHeight(
+      [
+        ...(card.label?.trim()
+          ? [{ text: card.label, fontSize: CARD_LABEL_FONT, gapAfter: 8, lineHeight: 1.18 }]
+          : []),
+        { text: card.body, fontSize: CARD_BODY_FONT, lineHeight: 1.24 },
+      ],
+      width,
+      42,
+      30,
+    ),
+  );
 }
 
-// ── Stacking Engine ───────────────────────────────────────────────────────────
+function renderPanelBlock(
+  block: PanelBlock,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+): SlideElement[] {
+  const railHeight = Math.max(56, height - RAIL_INSET * 2);
+  const align = block.align ?? chooseVerticalAlign(block.naturalH, height);
+  const elements: SlideElement[] = [
+    makeRoundedPanel({
+      left,
+      top,
+      width,
+      height,
+      fill: block.fill,
+      outlineColor: block.outlineColor,
+      markup: block.markup,
+      align,
+      shadow: block.shadow,
+    }),
+  ];
 
-interface StackBlock {
-  content: string;
-  bgColor: string | null; // null = no background shape
-  naturalH: number;
-  minH: number;
+  if (block.railColor) {
+    elements.push(
+      makeRail({
+        left: left + 12,
+        top: top + Math.max(14, Math.floor((height - railHeight) / 2)),
+        height: railHeight,
+        color: block.railColor,
+      }),
+    );
+  }
+
+  return elements;
 }
 
-/**
- * 将 blocks 从 startTop 开始垂直堆叠，自动扩展以填满画布到 targetFillRatio。
- * 若内容超出 canvas 底部边距，截去最后一块。
- */
 function stackBlocks(
-  blocks: StackBlock[],
+  blocks: PanelBlock[],
   canvasWidth: number,
   canvasHeight: number,
   startTop: number,
   targetFillRatio: number,
-): SlideElement[] {
-  if (blocks.length === 0) return [];
-  const w = cw(canvasWidth);
-  const x = LEFT_MARGIN;
+  maxBottom = canvasHeight - 60,
+): StackResult {
+  if (blocks.length === 0) return { elements: [], truncated: false };
 
-  // Step 1: 应用 max(natural, min)
-  let heights = blocks.map((b) => Math.max(b.minH, b.naturalH));
-
-  // Step 2: 计算自然总高度
+  const width = panelWidth(canvasWidth);
+  const naturalHeights = blocks.map((b) => Math.max(b.minH, b.naturalH));
   const totalGap = (blocks.length - 1) * CARD_GAP;
-  const naturalTotal = heights.reduce((s, h) => s + h, 0) + totalGap;
+  const naturalTotal = naturalHeights.reduce((sum, height) => sum + height, 0) + totalGap;
 
-  // Step 3: 若不足 targetFill，均匀扩展
-  const targetBottom = Math.round(canvasHeight * targetFillRatio);
+  const targetBottom = Math.min(Math.round(canvasHeight * targetFillRatio), maxBottom);
   const available = targetBottom - startTop;
-  if (naturalTotal < available && blocks.length > 0) {
+  let heights = [...naturalHeights];
+
+  if (naturalTotal < available) {
     const extra = Math.floor((available - naturalTotal) / blocks.length);
-    heights = heights.map((h) => h + extra);
+    heights = heights.map((height) => height + extra);
   }
 
-  // Step 4: 若溢出（超出 canvas - 60px），截去最后一块
-  const maxBottom = canvasHeight - 60;
-  let activeBlocks = blocks;
-  let activeHeights = heights;
-  let totalH = activeHeights.reduce((s, h) => s + h, 0) + (activeBlocks.length - 1) * CARD_GAP;
-  while (startTop + totalH > maxBottom && activeBlocks.length > 1) {
-    activeBlocks = activeBlocks.slice(0, -1);
-    activeHeights = activeHeights.slice(0, -1);
-    totalH = activeHeights.reduce((s, h) => s + h, 0) + (activeBlocks.length - 1) * CARD_GAP;
+  const totalHeight = heights.reduce((sum, height) => sum + height, 0) + totalGap;
+  if (startTop + totalHeight > maxBottom) {
+    return { elements: [], truncated: true };
   }
 
-  // Step 5: 渲染
   const elements: SlideElement[] = [];
   let cursor = startTop;
-  for (let i = 0; i < activeBlocks.length; i++) {
-    const h = activeHeights[i];
-    const b = activeBlocks[i];
-    if (b.bgColor) {
-      elements.push(makeShape(x, cursor, w, h, b.bgColor));
-    }
-    elements.push(makeText(x, cursor, w, h, b.content));
-    cursor += h + CARD_GAP;
+  for (let i = 0; i < blocks.length; i++) {
+    elements.push(...renderPanelBlock(blocks[i], PAGE_MARGIN, cursor, width, heights[i]));
+    cursor += heights[i] + CARD_GAP;
   }
-  return elements;
+
+  return { elements, truncated: false };
 }
 
-// ── Archetype Body Renderers ──────────────────────────────────────────────────
-
-/**
- * Generic renderer: lead（无图）/ concept / tip / summary
- * 结构: hero block + 0-3 supporting cards
- */
 function renderGenericBody(
   manifest: PortraitContentManifest,
   canvasWidth: number,
   canvasHeight: number,
-  heroBgColor: string,
-  cardBgColor: string,
+  palette: Palette,
   heroMinH: number,
-): SlideElement[] {
-  const w = cw(canvasWidth);
+  maxBottom = canvasHeight - 60,
+): StackResult {
+  const width = panelWidth(canvasWidth);
   const cards = manifest.supportingCards.slice(0, 3);
 
-  const blocks: StackBlock[] = [
+  const blocks: PanelBlock[] = [
     {
-      content: heroHtml(manifest.heroBlock, manifest.accentColor),
-      bgColor: heroBgColor,
-      naturalH: calcHeroHeight(manifest.heroBlock, w, heroMinH),
+      markup: heroMarkup(manifest.heroBlock, palette),
+      fill: palette.heroBg,
+      outlineColor: palette.heroOutline,
+      naturalH: calcHeroHeight(manifest.heroBlock, width, heroMinH),
       minH: heroMinH,
+      shadow: HERO_SHADOW,
     },
-    ...cards.map((c) => ({
-      content: cardHtml(c, manifest.accentColor),
-      bgColor: cardBgColor,
-      naturalH: calcCardHeight(c, w),
+    ...cards.map((card, index) => ({
+      markup: supportMarkup(card, palette),
+      fill: index % 2 === 0 ? palette.cardAltBg : palette.cardBg,
+      outlineColor: palette.cardOutline,
+      naturalH: calcCardHeight(card, width),
       minH: MIN_CARD_HEIGHT,
+      railColor: index % 2 === 0 ? palette.accentRail : palette.accentRailAlt,
     })),
   ];
 
-  return stackBlocks(blocks, canvasWidth, canvasHeight, CONTENT_START, 0.84);
+  return stackBlocks(blocks, canvasWidth, canvasHeight, CONTENT_START, 0.86, maxBottom);
 }
 
-/**
- * lead archetype with image
- * 结构: hero block + image + 0-1 card
- */
-function renderLeadWithImage(
-  manifest: PortraitContentManifest,
-  canvasWidth: number,
-  canvasHeight: number,
-  imageInfo: ImageInfo,
-): SlideElement[] {
-  const w = cw(canvasWidth);
-  const x = LEFT_MARGIN;
-
-  // Hero block
-  const heroH = calcHeroHeight(manifest.heroBlock, w, MIN_HERO_HEIGHT);
-  const heroElements: SlideElement[] = [
-    makeShape(x, CONTENT_START, w, heroH, '#eff6ff'), // 导学页 hero 淡蓝底色
-    makeText(x, CONTENT_START, w, heroH, heroHtml(manifest.heroBlock, manifest.accentColor)),
-  ];
-
-  // Image slot (below hero)
-  const imgTop = CONTENT_START + heroH + HERO_GAP;
-  const imgWidth = Math.round(w * 0.82);
-  const imgHeight = Math.round(imgWidth / Math.max(0.5, imageInfo.aspectRatio));
-  const imgMaxHeight = Math.round(canvasHeight * 0.3);
-  const finalImgH = Math.min(imgHeight, imgMaxHeight);
-  const finalImgW = Math.round(finalImgH * imageInfo.aspectRatio);
-  const finalImgLeft = Math.max(x, x + Math.floor((w - finalImgW) / 2));
-
-  const imageElements: SlideElement[] = [
-    makeImage(finalImgLeft, imgTop, finalImgW, finalImgH, imageInfo.id),
-  ];
-
-  // Optional supporting card below image
-  const cardTop = imgTop + finalImgH + HERO_GAP;
-  const cardElements: SlideElement[] = [];
-  if (manifest.supportingCards.length > 0) {
-    const card = manifest.supportingCards[0];
-    const cardH = calcCardHeight(card, w);
-    cardElements.push(makeShape(x, cardTop, w, cardH, CARD_BG_DEFAULT));
-    cardElements.push(makeText(x, cardTop, w, cardH, cardHtml(card, manifest.accentColor)));
-  }
-
-  return [...heroElements, ...imageElements, ...cardElements];
-}
-
-/**
- * compare archetype
- * 结构: heroBlock (Item A) + VS separator + supportingCards[0] (Item B)
- */
 function renderCompareBody(
   manifest: PortraitContentManifest,
   canvasWidth: number,
   canvasHeight: number,
-): SlideElement[] {
-  const w = cw(canvasWidth);
-  const x = LEFT_MARGIN;
-  const ITEM_MIN_H = 180;
-  const VS_HEIGHT = 60;
-
-  // Item A (hero block)
-  const itemAH = calcHeroHeight(manifest.heroBlock, w, ITEM_MIN_H);
-
-  // Item B (first supporting card, or placeholder)
+  palette: Palette,
+  maxBottom = canvasHeight - 60,
+): StackResult {
+  const width = panelWidth(canvasWidth);
   const itemB: PortraitCard = manifest.supportingCards[0] ?? { body: '' };
-  const itemBH = calcCardHeight(itemB, w, ITEM_MIN_H);
-
-  // Fill-to-canvas logic: expand both items equally if underfill
-  const totalNatural = itemAH + VS_HEIGHT + itemBH + CARD_GAP * 2;
-  const targetBottom = Math.round(canvasHeight * 0.84);
+  const firstNatural = calcHeroHeight(manifest.heroBlock, width, MIN_COMPARE_HEIGHT);
+  const secondNatural = calcCardHeight(itemB, width, MIN_COMPARE_HEIGHT);
+  const badgeHeight = 52;
+  const naturalTotal = firstNatural + secondNatural + badgeHeight + CARD_GAP * 2;
+  const targetBottom = Math.min(Math.round(canvasHeight * 0.84), maxBottom);
   const available = targetBottom - CONTENT_START;
-  const expandPer = totalNatural < available ? Math.floor((available - totalNatural) / 2) : 0;
+  const extra = naturalTotal < available ? Math.floor((available - naturalTotal) / 2) : 0;
+  const firstHeight = firstNatural + extra;
+  const secondHeight = secondNatural + extra;
 
-  const finalAH = itemAH + expandPer;
-  const finalBH = itemBH + expandPer;
+  if (CONTENT_START + firstHeight + secondHeight + badgeHeight + CARD_GAP * 2 > maxBottom) {
+    return { elements: [], truncated: true };
+  }
 
-  // Render
   const elements: SlideElement[] = [];
   let cursor = CONTENT_START;
 
-  // Item A
-  elements.push(makeShape(x, cursor, w, finalAH, '#dbeafe'));
-  elements.push(makeText(x, cursor, w, finalAH, heroHtml(manifest.heroBlock, manifest.accentColor)));
-  cursor += finalAH + CARD_GAP;
+  elements.push(
+    ...renderPanelBlock(
+      {
+        markup: heroMarkup(manifest.heroBlock, palette),
+        fill: palette.heroBg,
+        outlineColor: palette.heroOutline,
+        naturalH: firstNatural,
+        minH: MIN_COMPARE_HEIGHT,
+        shadow: HERO_SHADOW,
+      },
+      PAGE_MARGIN,
+      cursor,
+      width,
+      firstHeight,
+    ),
+  );
 
-  // VS separator
-  const vsContent = `<p style="font-size: 48px; color: ${manifest.accentColor}; font-weight: bold; text-align: center;">VS</p>`;
-  elements.push(makeText(x, cursor, w, VS_HEIGHT, vsContent));
-  cursor += VS_HEIGHT + CARD_GAP;
+  cursor += firstHeight + CARD_GAP;
+  elements.push(
+    makeRoundedPanel({
+      left: Math.round(canvasWidth / 2) - 52,
+      top: cursor,
+      width: 104,
+      height: badgeHeight,
+      fill: palette.vsBg,
+      outlineColor: palette.cardOutline,
+      markup: wrapBlock(
+        buildParagraph('VS', {
+          size: VS_FONT,
+          color: palette.vsText,
+          weight: 750,
+          align: 'center',
+          lineHeight: 1,
+        }),
+        '0',
+      ),
+      defaultColor: palette.vsText,
+      align: 'middle',
+    }),
+  );
 
-  // Item B
-  elements.push(makeShape(x, cursor, w, finalBH, '#dcfce7'));
-  elements.push(makeText(x, cursor, w, finalBH, cardHtml(itemB, manifest.accentColor)));
+  cursor += badgeHeight + CARD_GAP;
+  elements.push(
+    ...renderPanelBlock(
+      {
+        markup: supportMarkup(itemB, {
+          ...palette,
+          cardLabel: palette.accentRailAlt,
+        }),
+        fill: palette.cardBg,
+        outlineColor: palette.cardOutline,
+        naturalH: secondNatural,
+        minH: MIN_COMPARE_HEIGHT,
+        railColor: palette.accentRailAlt,
+      },
+      PAGE_MARGIN,
+      cursor,
+      width,
+      secondHeight,
+    ),
+  );
 
-  return elements;
+  return { elements, truncated: false };
 }
 
-/**
- * steps archetype
- * 结构: heroBlock (概述) + 各步骤卡片（带序号徽章指示器）
- */
 function renderStepsBody(
   manifest: PortraitContentManifest,
   canvasWidth: number,
   canvasHeight: number,
-): SlideElement[] {
-  const w = cw(canvasWidth);
-  const x = LEFT_MARGIN;
-  const STEP_INDICATOR_H = 32; // 步骤序号指示器高度
-  const STEP_MIN_H = 140;
-
-  // Overview card (heroBlock)
-  const overviewH = calcHeroHeight(manifest.heroBlock, w, MIN_HERO_HEIGHT);
-
-  // Step cards (up to 3)
-  const steps = manifest.supportingCards.slice(0, 3);
-
-  // Compute step heights
-  const stepHs = steps.map((s) => calcCardHeight(s, w, STEP_MIN_H));
-
-  // Fill-to-canvas calculation
-  const totalGaps =
+  palette: Palette,
+  maxBottom = canvasHeight - 60,
+): StackResult {
+  const width = panelWidth(canvasWidth);
+  const overviewNatural = calcHeroHeight(manifest.heroBlock, width, MIN_HERO_HEIGHT);
+  const stepCards = manifest.supportingCards.slice(0, 3);
+  const badgeSize = 54;
+  const badgeGap = 14;
+  const rowCardWidth = width - badgeSize - badgeGap;
+  const rowNaturals = stepCards.map((card) => calcCardHeight(card, rowCardWidth, MIN_STEP_HEIGHT));
+  const totalNatural =
+    overviewNatural +
     HERO_GAP +
-    (steps.length > 0 ? CARD_GAP * steps.length : 0) +
-    steps.length * STEP_INDICATOR_H;
-  const naturalTotal = overviewH + totalGaps + stepHs.reduce((s, h) => s + h, 0);
-  const targetBottom = Math.round(canvasHeight * 0.84);
+    rowNaturals.reduce((sum, height) => sum + height, 0) +
+    Math.max(0, stepCards.length - 1) * CARD_GAP;
+  const targetBottom = Math.min(Math.round(canvasHeight * 0.85), maxBottom);
   const available = targetBottom - CONTENT_START;
-  const expandPer =
-    naturalTotal < available
-      ? Math.floor((available - naturalTotal) / (steps.length + 1))
+  const extraPerRow =
+    totalNatural < available && stepCards.length > 0
+      ? Math.floor((available - totalNatural) / (stepCards.length + 1))
       : 0;
 
-  const finalOverviewH = overviewH + expandPer;
-  const finalStepHs = stepHs.map((h) => h + expandPer);
+  const overviewHeight = overviewNatural + extraPerRow;
+  const rowHeights = rowNaturals.map((height) => height + extraPerRow);
+  const finalTotal =
+    overviewHeight +
+    HERO_GAP +
+    rowHeights.reduce((sum, height) => sum + height, 0) +
+    Math.max(0, stepCards.length - 1) * CARD_GAP;
+
+  if (CONTENT_START + finalTotal > maxBottom) {
+    return { elements: [], truncated: true };
+  }
 
   const elements: SlideElement[] = [];
   let cursor = CONTENT_START;
 
-  // Overview
-  elements.push(makeShape(x, cursor, w, finalOverviewH, CARD_BG_DEFAULT));
-  elements.push(makeText(x, cursor, w, finalOverviewH, heroHtml(manifest.heroBlock, manifest.accentColor)));
-  cursor += finalOverviewH + HERO_GAP;
+  elements.push(
+    ...renderPanelBlock(
+      {
+        markup: heroMarkup(manifest.heroBlock, palette),
+        fill: palette.heroBg,
+        outlineColor: palette.heroOutline,
+        naturalH: overviewNatural,
+        minH: MIN_HERO_HEIGHT,
+        shadow: HERO_SHADOW,
+      },
+      PAGE_MARGIN,
+      cursor,
+      width,
+      overviewHeight,
+    ),
+  );
 
-  // Step cards
-  for (let i = 0; i < steps.length; i++) {
-    const h = finalStepHs[i];
-    const step = steps[i];
+  cursor += overviewHeight + HERO_GAP;
 
-    // Step number indicator (small colored bar above the card)
-    const indicatorContent = `<p style="font-size: 28px; color: #ffffff; font-weight: bold; text-align: left;">步骤 ${i + 1}</p>`;
-    elements.push(makeShape(x, cursor, 120, STEP_INDICATOR_H, manifest.accentColor));
-    elements.push(makeText(x, cursor, 120, STEP_INDICATOR_H, indicatorContent, '#ffffff'));
-    cursor += STEP_INDICATOR_H;
+  stepCards.forEach((card, index) => {
+    const rowHeight = rowHeights[index];
+    const badgeTop = cursor + Math.max(8, Math.floor((rowHeight - badgeSize) / 2));
+    elements.push(
+      makeBadge({
+        left: PAGE_MARGIN,
+        top: badgeTop,
+        size: badgeSize,
+        fill: palette.badgeBg,
+        color: palette.badgeText,
+        text: `${index + 1}`,
+      }),
+    );
+    elements.push(
+      ...renderPanelBlock(
+        {
+          markup: supportMarkup(card, palette),
+          fill: index % 2 === 0 ? palette.cardAltBg : palette.cardBg,
+          outlineColor: palette.cardOutline,
+          naturalH: rowNaturals[index],
+          minH: MIN_STEP_HEIGHT,
+        },
+        PAGE_MARGIN + badgeSize + badgeGap,
+        cursor,
+        rowCardWidth,
+        rowHeight,
+      ),
+    );
+    cursor += rowHeight + CARD_GAP;
+  });
 
-    // Step card
-    elements.push(makeShape(x, cursor, w, h, CARD_BG_DEFAULT));
-    elements.push(makeText(x, cursor, w, h, cardHtml(step, manifest.accentColor)));
-    cursor += h + CARD_GAP;
-  }
-
-  return elements;
+  return { elements, truncated: false };
 }
-
-// ── Footer Callout ────────────────────────────────────────────────────────────
 
 function renderFooterCallout(
   text: string,
   canvasWidth: number,
   canvasHeight: number,
+  palette: Palette,
 ): SlideElement[] {
-  const w = cw(canvasWidth);
-  const footerTop = canvasHeight - FOOTER_RESERVE;
-  const footerContent = `<p style="font-size: ${FOOTER_FONT}px; color: ${DARK_TEXT}; text-align: left;">${escapeHtml(text)}</p>`;
-  const footerH = Math.max(100, estimateTextHeight(text, FOOTER_FONT, w));
+  const width = panelWidth(canvasWidth);
+  const height = Math.max(
+    96,
+    estimateRichBlockHeight([{ text, fontSize: FOOTER_FONT, lineHeight: 1.2 }], width, 38, 24),
+  );
+  const top = canvasHeight - height - 48;
   return [
-    makeShape(LEFT_MARGIN, footerTop, w, footerH, FOOTER_BG),
-    makeText(LEFT_MARGIN, footerTop, w, footerH, footerContent),
+    makeRoundedPanel({
+      left: PAGE_MARGIN,
+      top,
+      width,
+      height,
+      fill: palette.footerBg,
+      outlineColor: palette.footerOutline,
+      markup: footerMarkup(text, palette),
+      defaultColor: palette.footerText,
+      align: 'middle',
+      shadow: FOOTER_SHADOW,
+    }),
   ];
 }
 
-// ── Main Entry Point ──────────────────────────────────────────────────────────
-
-/**
- * 将 PortraitContentManifest 渲染为完整的 slide 元素列表。
- *
- * @param manifest   AI 输出的内容清单
- * @param canvasWidth  画布宽度（如 1000）
- * @param canvasHeight 画布高度（如 1333 for 3:4）
- * @param imageInfo  可选图片信息，供 lead 图片槽位计算高度
- */
 export function renderPortraitTemplate(
   manifest: PortraitContentManifest,
   canvasWidth: number,
   canvasHeight: number,
-  imageInfo?: ImageInfo,
-): { elements: SlideElement[]; background: NonNullable<GeneratedSlideData['background']> } {
+): {
+  elements: SlideElement[];
+  background: NonNullable<GeneratedSlideData['background']>;
+  truncated: boolean;
+} {
+  const palette = PALETTE_BY_ARCHETYPE[manifest.archetype];
   const elements: SlideElement[] = [];
   const background: NonNullable<GeneratedSlideData['background']> = {
     type: 'solid',
-    color: '#ffffff',
+    color: '#FCFCFD',
   };
+  const footerReservedTop = manifest.footerCallout?.trim()
+    ? canvasHeight - FOOTER_RESERVE
+    : canvasHeight - 56;
 
-  // 1. Title bar (所有 archetype 共用)
   elements.push(...renderTitleBar(manifest, canvasWidth));
 
-  // 2. Archetype body
-  let bodyElements: SlideElement[];
+  let bodyElements: SlideElement[] = [];
+  let truncated = false;
 
   switch (manifest.archetype) {
-    case 'compare':
-      if (manifest.supportingCards.length === 0) {
-        // compare 需要对比项，若缺失则降级为 concept 渲染
-        bodyElements = renderGenericBody(manifest, canvasWidth, canvasHeight, '#e8f4fd', CARD_BG_DEFAULT, 200);
-      } else {
-        bodyElements = renderCompareBody(manifest, canvasWidth, canvasHeight);
-      }
-      break;
-
-    case 'steps':
-      bodyElements = renderStepsBody(manifest, canvasWidth, canvasHeight);
-      break;
-
-    case 'lead':
-      if (
-        manifest.imageRole !== 'skip' &&
-        manifest.imageId &&
-        imageInfo
-      ) {
-        bodyElements = renderLeadWithImage(manifest, canvasWidth, canvasHeight, imageInfo);
-      } else {
-        bodyElements = renderGenericBody(
-          manifest, canvasWidth, canvasHeight,
-          '#eff6ff', // 导学页 hero 用淡蓝底色
-          CARD_BG_DEFAULT,
-          MIN_HERO_HEIGHT,
-        );
-      }
-      break;
-
-    case 'concept':
-      bodyElements = renderGenericBody(
-        manifest, canvasWidth, canvasHeight,
-        '#e8f4fd',
-        CARD_BG_DEFAULT,
-        200,
+    case 'compare': {
+      const result = renderCompareBody(
+        manifest,
+        canvasWidth,
+        canvasHeight,
+        palette,
+        footerReservedTop,
       );
+      bodyElements = result.elements;
+      truncated = result.truncated;
       break;
-
-    case 'tip':
-      bodyElements = renderGenericBody(
-        manifest, canvasWidth, canvasHeight,
-        '#fff3cd',
-        CARD_BG_DEFAULT,
+    }
+    case 'steps': {
+      const result = renderStepsBody(
+        manifest,
+        canvasWidth,
+        canvasHeight,
+        palette,
+        footerReservedTop,
+      );
+      bodyElements = result.elements;
+      truncated = result.truncated;
+      break;
+    }
+    case 'lead': {
+      const result = renderGenericBody(
+        manifest,
+        canvasWidth,
+        canvasHeight,
+        palette,
+        196,
+        footerReservedTop,
+      );
+      bodyElements = result.elements;
+      truncated = result.truncated;
+      break;
+    }
+    case 'concept': {
+      const result = renderGenericBody(
+        manifest,
+        canvasWidth,
+        canvasHeight,
+        palette,
+        188,
+        footerReservedTop,
+      );
+      bodyElements = result.elements;
+      truncated = result.truncated;
+      break;
+    }
+    case 'tip': {
+      const result = renderGenericBody(
+        manifest,
+        canvasWidth,
+        canvasHeight,
+        palette,
         180,
+        footerReservedTop,
       );
+      bodyElements = result.elements;
+      truncated = result.truncated;
       break;
-
+    }
     case 'summary':
-    default:
-      bodyElements = renderGenericBody(
-        manifest, canvasWidth, canvasHeight,
-        '#f0fdf4',
-        CARD_BG_DEFAULT,
-        MIN_HERO_HEIGHT,
+    default: {
+      const result = renderGenericBody(
+        manifest,
+        canvasWidth,
+        canvasHeight,
+        palette,
+        184,
+        footerReservedTop,
       );
+      bodyElements = result.elements;
+      truncated = result.truncated;
       break;
+    }
   }
+
   elements.push(...bodyElements);
+  const bodyMaxBottom = bodyElements.reduce((max, el) => {
+    const bottom = Number(el.top || 0) + Number(el.height || 0);
+    return Math.max(max, bottom);
+  }, 0);
 
-  // 3. Footer callout (可选)
-  if (manifest.footerCallout && manifest.footerCallout.trim()) {
-    elements.push(...renderFooterCallout(manifest.footerCallout, canvasWidth, canvasHeight));
+  if (manifest.footerCallout?.trim()) {
+    elements.push(...renderFooterCallout(manifest.footerCallout, canvasWidth, canvasHeight, palette));
   }
 
-  return { elements, background };
+  if (bodyMaxBottom > footerReservedTop) {
+    truncated = true;
+  }
+
+  const maxBottom = elements.reduce((max, el) => {
+    const bottom = Number(el.top || 0) + Number(el.height || 0);
+    return Math.max(max, bottom);
+  }, 0);
+  if (maxBottom > canvasHeight - 36) {
+    truncated = true;
+  }
+
+  return { elements, background, truncated };
 }

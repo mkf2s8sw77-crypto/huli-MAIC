@@ -82,6 +82,7 @@ export type TTSProviderId =
   | 'azure-tts'
   | 'glm-tts'
   | 'qwen-tts'
+  | 'tencent-tts'
   | 'minimax-tts'
   | 'elevenlabs-tts'
   | 'browser-native-tts';
@@ -127,6 +128,9 @@ export interface TTSModelConfig {
   providerId: TTSProviderId;
   apiKey?: string;
   baseUrl?: string;
+  secretId?: string;
+  secretKey?: string;
+  region?: string;
   voice: string;
   speed?: number;
   format?: string;

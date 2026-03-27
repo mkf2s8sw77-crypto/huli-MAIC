@@ -115,7 +115,7 @@ export function GenerationToolbar({
 
   // ─── Pill button helper ─────────────────────────────
   const pillCls =
-    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all cursor-pointer select-none whitespace-nowrap border';
+    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 sm:py-1 text-xs font-medium transition-all cursor-pointer select-none whitespace-nowrap border';
   const pillMuted = `${pillCls} border-border/50 text-muted-foreground/70 hover:text-foreground hover:bg-muted/60`;
   const pillActive = `${pillCls} border-violet-200/60 dark:border-violet-700/50 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300`;
 
@@ -389,7 +389,7 @@ export function GenerationToolbar({
               value={viewportPreset}
               onValueChange={(value) => onViewportPresetChange(value as ViewportPreset)}
             >
-              <SelectTrigger className="h-7 rounded-full border-border/50 bg-transparent px-2.5 text-xs shadow-none min-w-[84px]">
+              <SelectTrigger className="h-9 sm:h-7 rounded-full border-border/50 bg-transparent px-2.5 text-xs shadow-none min-w-[84px]">
                 <span className="flex items-center gap-1.5 truncate">
                   <span className="text-muted-foreground/70">{t('toolbar.viewportPreset')}</span>
                   <SelectValue />

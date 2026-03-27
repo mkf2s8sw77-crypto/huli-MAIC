@@ -93,6 +93,8 @@
 import type { TTSModelConfig } from './types';
 import { TTS_PROVIDERS } from './constants';
 import { WebSocket } from 'ws';
+import * as tencentcloud from 'tencentcloud-sdk-nodejs-tts';
+import { randomUUID } from 'crypto';
 
 /**
  * Result of TTS generation
@@ -131,6 +133,9 @@ export async function generateTTS(
 
     case 'qwen-tts':
       return await generateQwenTTS(config, text);
+
+    case 'tencent-tts':
+      return await generateTencentTTS(config, text);
 
     case 'minimax-tts':
       return await generateMiniMaxTTS(config, text);
@@ -320,6 +325,76 @@ async function generateQwenTTS(config: TTSModelConfig, text: string): Promise<TT
   return {
     audio: new Uint8Array(arrayBuffer),
     format: 'wav', // Qwen3 TTS returns WAV format
+  };
+}
+
+function mapSpeedToTencent(speed: number | undefined): number {
+  const input = Math.max(0.6, Math.min(2.5, speed ?? 1.0));
+  const anchors = [
+    { ratio: 0.6, value: -2 },
+    { ratio: 0.8, value: -1 },
+    { ratio: 1.0, value: 0 },
+    { ratio: 1.2, value: 1 },
+    { ratio: 1.5, value: 2 },
+    { ratio: 2.5, value: 6 },
+  ];
+
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const a = anchors[i];
+    const b = anchors[i + 1];
+    if (input >= a.ratio && input <= b.ratio) {
+      const t = (input - a.ratio) / (b.ratio - a.ratio);
+      return Number((a.value + (b.value - a.value) * t).toFixed(2));
+    }
+  }
+
+  return 0;
+}
+
+async function generateTencentTTS(
+  config: TTSModelConfig,
+  text: string,
+): Promise<TTSGenerationResult> {
+  if (!config.secretId || !config.secretKey) {
+    throw new Error('Tencent TTS requires server-side SecretId and SecretKey');
+  }
+
+  const Client = tencentcloud.tts.v20190823.Client;
+  const endpoint = (config.baseUrl || TTS_PROVIDERS['tencent-tts'].defaultBaseUrl || 'tts.tencentcloudapi.com')
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/+$/, '');
+  const codec = (config.format || 'mp3').toLowerCase();
+
+  const client = new Client({
+    credential: {
+      secretId: config.secretId,
+      secretKey: config.secretKey,
+    },
+    region: config.region || 'ap-beijing',
+    profile: {
+      httpProfile: {
+        endpoint,
+      },
+    },
+  });
+
+  const response = await client.TextToVoice({
+    Text: text,
+    SessionId: randomUUID(),
+    VoiceType: Number(config.voice || '501001'),
+    Codec: codec,
+    SampleRate: 16000,
+    Speed: mapSpeedToTencent(config.speed),
+    Volume: 0,
+  });
+
+  if (!response.Audio) {
+    throw new Error('Tencent TTS API returned no audio');
+  }
+
+  return {
+    audio: Uint8Array.from(Buffer.from(response.Audio, 'base64')),
+    format: codec,
   };
 }
 

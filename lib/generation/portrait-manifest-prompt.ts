@@ -42,12 +42,15 @@ Output ONLY a raw JSON object (no markdown fences, no explanation):
 | tip       | Warning, critical reminder, key callout |
 | summary   | Scene/chapter wrap-up, key takeaways |
 
-## Image Role Rules
-- "hero": ONLY for "lead" archetype where image IS the main visual
-- "supporting": ONLY for "steps" archetype, placed below a step card
-- "skip": Default for all other archetypes (card-only looks cleaner)
-- If no imageId available → always "skip"
-- compare, summary → always "skip"
+## Portrait Image Policy (Hard Disabled)
+
+Portrait slides are card + text compositions. Images are fully disabled.
+
+**Hard rules (no exceptions):**
+1. imageRole MUST be "skip"
+2. imageId MUST be null
+3. Ignore all Available Images and AI-Generated Media entries
+4. If the content seems to need a visual aid, express it as text cards, comparison cards, or step cards instead
 
 ## LaTeX / Chart Degradation
 If content includes formulas or charts, convert to plain-text description.
@@ -75,22 +78,10 @@ export function buildPortraitManifestUserPrompt(
 ): string {
   const keyPointsList = (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n');
 
-  const imageLines =
+  const imageSection =
     assignedImages && assignedImages.length > 0
-      ? assignedImages
-          .map((img) => `- ${img.id}${img.description ? `: ${img.description}` : ''}`)
-          .join('\n')
-      : 'No images available';
-
-  const mediaLines =
-    outline.mediaGenerations && outline.mediaGenerations.length > 0
-      ? outline.mediaGenerations
-          .map((mg) => `- ${mg.elementId}: ${mg.prompt} (${mg.type})`)
-          .join('\n')
-      : '';
-
-  const mediaSectionText = mediaLines ? `\nAI-Generated Media:\n${mediaLines}` : '';
-  const imageSection = `Available Images:\n${imageLines}${mediaSectionText}`;
+      ? 'Available Images:\nNone — portrait policy forbids all images on this slide.'
+      : 'Available Images:\nNone';
 
   return `Scene Title: ${outline.title}
 Description: ${outline.description || '(none)'}

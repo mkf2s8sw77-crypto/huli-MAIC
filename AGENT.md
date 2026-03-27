@@ -145,6 +145,9 @@
 
 相关路径兼容性是长期要求，不是一次性部署技巧。
 
+所有“回首页”入口也必须走统一 helper 或 `withBasePath('/')`，不要手写 `/`，
+避免在子路径部署下出现 `/maic/maic` 这类重复拼接。
+
 ### 5.2 媒体能力是服务端统一编排
 
 LLM、Image、TTS、ASR、PDF、Web Search 都属于应用编排的多 provider 能力。  
@@ -209,10 +212,23 @@ LLM、Image、TTS、ASR、PDF、Web Search 都属于应用编排的多 provider 
 - 修改文件：
   - `lib/generation/portrait-layout-linter.ts` → 新增 hero-too-small / lower-half-empty / archetype-incomplete 3 条规则
   - `lib/generation/scene-generator.ts` → 新增 generatePortraitSlide() + portrait 分流（Phase 7 分支在旧 aiCall 之前，节省 AI 调用）
-- AI 决定：archetype 选型、标题文字、hero/card 内容、图片角色
+- AI 决定：archetype 选型、标题文字、hero/card 内容
 - 程序决定：所有坐标、块高度（文本 fitting）、堆叠节奏
 - 失败降级：manifest 解析失败时自动回退旧路径，不影响生成流程
 - 横版完全不受影响（分流在 isPortrait 分支内）
+
+竖版模板引擎 v2 已接管视觉呈现：
+- 配色由程序端 archetype theme token 固定控制，不再依赖 AI 输出的 `accentColor`
+- 卡片改为 `ShapeElement.text` 一体化渲染，避免旧版 `shape + text` 叠层导致的垂直不居中、文字漂移和溢出观感
+- 统一采用圆角面板、轻描边、柔和底色、窄色条等稳定卡片语言，目标对齐 quiz 场景的完成度
+
+竖版完全禁图策略（Phase 8）已完成，在四层做约束：
+- **大纲层**（`buildOutlineOrientationRules`）：portrait 规则明确 `mediaGenerations = 0`，并禁止 `suggestedImageIds`
+- **大纲清洗层**（`enforcePortraitOutlineMediaPolicy`）：portrait outlines 在运行时强制清空 `suggestedImageIds` 与 `mediaGenerations`
+- **Manifest 层**（`buildPortraitManifestSystemPrompt`）：`imageRole` 必须是 `skip`，`imageId` 必须是 null
+- **内容生成层**（`generateSlideContent` + `enforcePortraitImagePolicy`）：portrait 模板路径与旧 fallback 路径都不再接收任何图片输入
+- 结果：竖版 `lead / concept / compare / steps / tip / summary` 全部禁图，只允许卡片/文本/强调形状
+- 横版课程完全不受影响（所有变更在 portrait 分支内）
 
 竖版大纲生成（scene outline 阶段）已通过 `outline_orientation_rules` 变量实现拆页差异化，相关实现：
 - `lib/generation/outline-generator.ts` → `buildOutlineOrientationRules()`（已导出）

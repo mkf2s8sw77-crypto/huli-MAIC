@@ -38,6 +38,7 @@ export const generationZhCN = {
     generatingFirstPage: '首页内容生成中...',
     firstPageReady: '首页已就绪！正在打开课堂...',
     speechFailed: '语音合成失败',
+    speechSkippedWarning: '部分语音合成失败，已跳过预生成语音，课堂仍可继续使用',
     retryScene: '重试生成',
     retryingScene: '正在重新生成...',
     backToHome: '返回首页',
@@ -105,6 +106,8 @@ export const generationEnUS = {
     generatingFirstPage: 'Generating first page...',
     firstPageReady: 'First page ready! Opening classroom...',
     speechFailed: 'Speech generation failed',
+    speechSkippedWarning:
+      'Some speech synthesis requests failed. Pre-generated audio was skipped, but the classroom can still be used.',
     retryScene: 'Retry',
     retryingScene: 'Regenerating...',
     backToHome: 'Back to Home',

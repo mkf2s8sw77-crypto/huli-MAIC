@@ -606,6 +606,25 @@ export const TTS_PROVIDERS: Record<TTSProviderId, TTSProviderConfig> = {
     supportedFormats: ['mp3', 'wav', 'pcm'],
   },
 
+  'tencent-tts': {
+    id: 'tencent-tts',
+    name: 'Tencent Cloud TTS',
+    // SecretId/SecretKey are resolved server-side; client does not provide an API key.
+    requiresApiKey: false,
+    defaultBaseUrl: 'tts.tencentcloudapi.com',
+    voices: [
+      {
+        id: '501001',
+        name: '智兰',
+        language: 'zh-CN',
+        gender: 'female',
+        description: '腾讯云标准音色：智兰',
+      },
+    ],
+    supportedFormats: ['mp3', 'wav', 'pcm'],
+    speedRange: { min: 0.6, max: 2.5, default: 1.0 },
+  },
+
   'minimax-tts': {
     id: 'minimax-tts',
     name: 'MiniMax TTS',
@@ -923,6 +942,7 @@ export const DEFAULT_TTS_VOICES: Record<TTSProviderId, string> = {
   'azure-tts': 'zh-CN-XiaoxiaoNeural',
   'glm-tts': 'tongtong',
   'qwen-tts': 'Cherry',
+  'tencent-tts': '501001',
   'minimax-tts': 'female-shaonv',
   'elevenlabs-tts': 'EXAVITQu4vr4xnSDxMaL',
   'browser-native-tts': 'default',

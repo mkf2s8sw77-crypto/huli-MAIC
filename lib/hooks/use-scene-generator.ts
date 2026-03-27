@@ -8,8 +8,7 @@ import { db } from '@/lib/utils/database';
 import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generation';
 import type { AgentInfo } from '@/lib/generation/generation-pipeline';
 import type { Scene } from '@/lib/types/stage';
-import type { Action, SpeechAction } from '@/lib/types/action';
-import type { TTSProviderId } from '@/lib/audio/types';
+import type { SpeechAction } from '@/lib/types/action';
 import type { ViewportPreset } from '@/lib/config/viewport';
 import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
@@ -200,6 +199,9 @@ async function generateTTSForScene(
     try {
       await generateAndStoreTTS(audioId, action.text, signal);
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
       failedCount++;
       lastError = error instanceof Error ? error.message : `TTS failed for action ${action.id}`;
       log.warn('TTS generation failed:', {
@@ -208,6 +210,10 @@ async function generateTTSForScene(
         textLength: action.text.length,
         error: lastError,
       });
+      if (/insufficient balance|余额不足/i.test(lastError)) {
+        // Provider account is exhausted; remaining TTS calls would fail identically.
+        break;
+      }
     }
   }
 
@@ -374,19 +380,14 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
             const scene = actionsResult.scene;
             const settings = useSettingsStore.getState();
 
-            // TTS generation — failure means the whole scene fails
+            // TTS generation — degrade gracefully when provider-side TTS fails.
+            // Playback can still continue via browser-native TTS or reading timer.
             if (settings.ttsEnabled && settings.ttsProviderId !== 'browser-native-tts') {
               const ttsResult = await generateTTSForScene(scene, signal);
               if (!ttsResult.success) {
-                if (abortRef.current || store.getState().generationEpoch !== startEpoch) {
-                  pausedByFailureOrAbort = true;
-                  break;
-                }
-                store.getState().addFailedOutline(outline);
-                options.onSceneFailed?.(outline, ttsResult.error || 'TTS generation failed');
-                store.getState().setGenerationStatus('paused');
-                pausedByFailureOrAbort = true;
-                break;
+                log.warn(
+                  `[SceneGenerator] TTS failed for outline "${outline.title}" (${ttsResult.failedCount} clips). Continuing without pre-generated audio.`,
+                );
               }
             }
 
@@ -524,8 +525,9 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
         if (settings.ttsEnabled && settings.ttsProviderId !== 'browser-native-tts') {
           const ttsResult = await generateTTSForScene(actionsResult.scene, signal);
           if (!ttsResult.success) {
-            store.getState().addFailedOutline(outline);
-            return;
+            log.warn(
+              `[SceneGenerator] Retry path TTS failed for outline "${outline.title}" (${ttsResult.failedCount} clips). Continuing without pre-generated audio.`,
+            );
           }
         }
 

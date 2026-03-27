@@ -57,7 +57,7 @@ import {
   buildPortraitManifestSystemPrompt,
   buildPortraitManifestUserPrompt,
 } from './portrait-manifest-prompt';
-import { renderPortraitTemplate, type ImageInfo } from './portrait-template-engine';
+import { renderPortraitTemplate } from './portrait-template-engine';
 import { isValidManifest, type PortraitContentManifest } from './portrait-content-schema';
 const log = createLogger('Generation');
 
@@ -556,7 +556,7 @@ Pick the archetype that best fits the scene's educational goal, then follow its 
 *Use for: scene openings, topic introductions, chapter starters*
 - Title bar: top=50, height=148, width=${canvasWidth}, LEFT-aligned 64-72px, on a filled colored ShapeElement (behind the text)
 - Hook / intro text: top=230, height≈110, width=${singleBlockWidth}, left=60, 44-48px, left-aligned
-- Main visual image: top=370, width≈${Math.round(singleBlockWidth * 0.9)}, centered, image serves as visual anchor
+- Main visual area: use a dominant hero card instead of any image
 - Bottom callout card (optional): top≈${canvasHeight - 220}, height=150, full-width accent card, 40-44px
 
 **A2 — Concept / Definition (概念/定义页)**
@@ -564,7 +564,7 @@ Pick the archetype that best fits the scene's educational goal, then follow its 
 - Title bar: top=50, height=128, full-width, 64-72px, LEFT-aligned, on colored ShapeElement
 - CORE DEFINITION CARD (dominant element): top=210, height≈${Math.round(canvasHeight * 0.24)}, width=${singleBlockWidth}, left=60, colored bg (#e8f4fd or similar), 48-52px BOLD
 - Key point cards: 2-3 stacked below, each full-width, height≈${Math.round(canvasHeight * 0.14)}, 44-48px, with subtle border or bg
-- Image: omit UNLESS it directly illustrates the concept — card-based layout is preferred over forced images
+- Image: forbidden in portrait. Express visual ideas with card structure instead
 
 **A3 — Comparison (对比页)**
 *Use for: two options, before/after, pros/cons, two approaches*
@@ -586,7 +586,7 @@ Pick the archetype that best fits the scene's educational goal, then follow its 
 - Title bar: top=50, height=128, full-width, 64-72px, LEFT-aligned
 - ACCENT BOX (dominant): top=210, height≈${Math.round(canvasHeight * 0.2)}, full-width, strong accent color (#fff3cd/#f8d7da/#dbeafe), 48-52px BOLD
 - Supporting detail cards: 2-3 stacked below, each full-width, height≈${Math.round(canvasHeight * 0.13)}, 44-48px
-- Image: optional, only if directly relevant to the tip content
+- Image: forbidden in portrait. Use stacked callout cards instead
 
 **A6 — Summary / Wrap-up (总结页)**
 *Use for: scene conclusions, review slides, key takeaway summaries*
@@ -631,27 +631,16 @@ This is the #1 failure mode for portrait slides — it looks like a PPT transpla
 
 ---
 
-### Portrait Media Strategy — Image Usage Rules
+### Portrait Media Strategy — Images Disabled
 
-Use images only when they serve a clear structural role. Do NOT use images as decoration.
+Portrait slides must be built with text blocks, cards, dividers, and emphasis shapes only.
 
-| Structural role | Appropriate page type | Recommended width |
-|-----------------|----------------------|-------------------|
-| Main visual anchor | Cover/Lead-in (A1) — image IS the main visual | ~${Math.round(singleBlockWidth * 0.9)}px, centered |
-| Step illustration | Process (A4) — placed BELOW the relevant step card | ~${Math.round(singleBlockWidth * 0.72)}px |
-| Concept diagram | Definition (A2) ONLY if image clarifies better than words | ~${Math.round(singleBlockWidth * 0.8)}px |
-
-**Skip the image entirely when:**
-- No image is assigned to this scene, or assigned image is not relevant
-- Page archetype is Comparison (A3) or Summary (A6) — card-only layout is cleaner
-- Adding the image would reduce the text/card area and make content feel crowded
-- The image is decorative, loosely related, or just filling empty space
-
-**Image sizing rules:**
-- Landscape images (aspect ratio > 1.5): max width ${Math.round(singleBlockWidth * 0.85)}px; height = width ÷ aspect_ratio
-- Square or portrait images (ratio ≤ 1.0): width ${Math.round(singleBlockWidth * 0.5)}–${Math.round(singleBlockWidth * 0.65)}px
-
-**No image available?** Build a card-based layout — it looks more professional than a forced irrelevant image.`;
+**Hard rules:**
+- Do NOT generate any image elements
+- Do NOT use assigned PDF images
+- Do NOT use AI-generated image placeholders
+- Do NOT reserve blank space for a future image
+- If the content would normally use an image, convert that visual idea into cards or step blocks`;
   } else {
     const singleBlockWidth = canvasWidth - 120;
     const contentBottom = Math.round(canvasHeight * 0.85);
@@ -675,12 +664,29 @@ This is a **LANDSCAPE** canvas. Standard horizontal layout applies.
  *
  * 失败时返回 null，调用方降级走旧生成路径。
  */
+
+/**
+ * 竖版完全禁图策略：所有 archetype 都必须跳过图片。
+ * 不依赖 AI 遵守 prompt 规则，是最终兜底的确定性守卫。
+ */
+function enforcePortraitImagePolicy(
+  manifest: PortraitContentManifest,
+): PortraitContentManifest {
+  if (manifest.imageRole !== 'skip' || manifest.imageId) {
+    log.info(
+      `[Portrait ImagePolicy] archetype="${manifest.archetype}" → force imageRole "${manifest.imageRole}" → "skip"; imageId cleared`,
+    );
+    return { ...manifest, imageRole: 'skip', imageId: undefined };
+  }
+  return manifest;
+}
+
 async function generatePortraitSlide(
   outline: SceneOutline,
   aiCall: AICallFn,
   assignedImages: PdfImage[] | undefined,
-  imageMapping: ImageMapping | undefined,
-  generatedMediaMapping: ImageMapping | undefined,
+  _imageMapping: ImageMapping | undefined,
+  _generatedMediaMapping: ImageMapping | undefined,
   canvasWidth: number,
   canvasHeight: number,
 ): Promise<GeneratedSlideContent | null> {
@@ -696,44 +702,37 @@ async function generatePortraitSlide(
       return null;
     }
 
-    // Step 2: 解析图片信息（供 lead 图片槽位计算高度）
-    let imageInfo: ImageInfo | undefined;
-    if (manifest.imageId && manifest.imageRole !== 'skip') {
-      if (manifest.imageId.startsWith('gen_')) {
-        imageInfo = { id: manifest.imageId, aspectRatio: 16 / 9 };
-      } else if (assignedImages) {
-        const imgMeta = assignedImages.find((img) => img.id === manifest.imageId);
-        if (imgMeta?.width && imgMeta?.height) {
-          imageInfo = { id: manifest.imageId, aspectRatio: imgMeta.width / imgMeta.height };
-        } else if (imgMeta) {
-          imageInfo = { id: manifest.imageId, aspectRatio: 4 / 3 };
-        }
-      }
-    }
+    // 强制执行竖版完全禁图策略（不依赖 AI 遵守 prompt）
+    const enforcedManifest = enforcePortraitImagePolicy(manifest);
 
-    // Step 3: 渲染模板
-    const { elements: rawElements, background } = renderPortraitTemplate(
-      manifest,
+    // Step 2: 渲染模板
+    const { elements: rawElements, background, truncated } = renderPortraitTemplate(
+      enforcedManifest,
       canvasWidth,
       canvasHeight,
-      imageInfo,
     );
 
-    // Step 4: 修复默认值 + 解析图片 ID
+    if (truncated) {
+      log.warn(
+        `Portrait template overflow for "${outline.title}" — template engine could not fit all content without truncation, falling back to old path`,
+      );
+      return null;
+    }
+
+    // Step 3: 修复默认值
     const fixedElements = fixElementDefaults(
       rawElements as GeneratedSlideData['elements'],
       assignedImages,
     );
-    const resolvedElements = resolveImageIds(fixedElements, imageMapping, generatedMediaMapping);
 
-    // Step 5: 分配 nanoid + rotate
-    const processedElements: PPTElement[] = resolvedElements.map((el) => ({
+    // Step 4: 分配 nanoid + rotate
+    const processedElements: PPTElement[] = fixedElements.map((el) => ({
       ...el,
       id: `${el.type}_${nanoid(8)}`,
       rotate: 0,
     })) as PPTElement[];
 
-    // Step 6: Lint + 最多 1 次 repair
+    // Step 5: Lint + 最多 1 次 repair
     const rawEls = processedElements as unknown as Record<string, unknown>[];
     const lintResult = lintPortraitLayout(rawEls, canvasWidth, canvasHeight);
     let finalElements = processedElements;
@@ -758,7 +757,7 @@ async function generatePortraitSlide(
       }
     }
 
-    // Step 7: 处理背景
+    // Step 6: 处理背景
     let slideBackground: SlideBackground | undefined;
     if (background.type === 'solid' && background.color) {
       slideBackground = { type: 'solid', color: background.color };
@@ -790,11 +789,20 @@ async function generateSlideContent(
 ): Promise<GeneratedSlideContent | null> {
   const lang = outline.language || 'zh-CN';
 
+  // Canvas dimensions (matching viewportSize and viewportRatio)
+  const viewportPreset = viewport?.viewportPreset || DEFAULT_VIEWPORT_PRESET;
+  const canvasWidth = viewport?.viewportSize || DEFAULT_VIEWPORT_SIZE;
+  const canvasHeight =
+    viewport?.viewportRatio !== undefined
+      ? canvasWidth * viewport.viewportRatio
+      : getViewportHeight(canvasWidth, viewportPreset);
+  const isPortrait = canvasHeight > canvasWidth;
+
   // Build assigned images description for the prompt
   let assignedImagesText = '无可用图片，禁止插入任何 image 元素';
   let visionImages: Array<{ id: string; src: string }> | undefined;
 
-  if (assignedImages && assignedImages.length > 0) {
+  if (!isPortrait && assignedImages && assignedImages.length > 0) {
     if (visionEnabled && imageMapping) {
       // Vision mode: split into vision images and text-only
       const withSrc = assignedImages.filter((img) => imageMapping[img.id]);
@@ -822,7 +830,7 @@ async function generateSlideContent(
   }
 
   // Add generated media placeholders info (images + videos)
-  if (outline.mediaGenerations && outline.mediaGenerations.length > 0) {
+  if (!isPortrait && outline.mediaGenerations && outline.mediaGenerations.length > 0) {
     const genImgDescs = outline.mediaGenerations
       .filter((mg) => mg.type === 'image')
       .map((mg) => `- ${mg.elementId}: "${mg.prompt}" (aspect ratio: ${mg.aspectRatio || '16:9'})`)
@@ -850,16 +858,7 @@ async function generateSlideContent(
     }
   }
 
-  // Canvas dimensions (matching viewportSize and viewportRatio)
-  const viewportPreset = viewport?.viewportPreset || DEFAULT_VIEWPORT_PRESET;
-  const canvasWidth = viewport?.viewportSize || DEFAULT_VIEWPORT_SIZE;
-  const canvasHeight =
-    viewport?.viewportRatio !== undefined
-      ? canvasWidth * viewport.viewportRatio
-      : getViewportHeight(canvasWidth, viewportPreset);
-
   // Orientation-aware design rules
-  const isPortrait = canvasHeight > canvasWidth;
   const canvasOrientation = isPortrait ? 'portrait' : 'landscape';
   const orientationDesignRules = buildSlideOrientationRules(canvasWidth, canvasHeight, isPortrait);
 

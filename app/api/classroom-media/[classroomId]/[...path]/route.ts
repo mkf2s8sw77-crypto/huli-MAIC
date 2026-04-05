@@ -1,7 +1,8 @@
 import { promises as fs, createReadStream } from 'fs';
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
-import { CLASSROOMS_DIR, isValidClassroomId } from '@/lib/server/classroom-storage';
+import { isValidClassroomId } from '@/lib/server/classroom-storage';
+import { classroomAssetRoot } from '@/lib/server/runtime-paths';
 
 const MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -40,8 +41,9 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid path' }, { status: 404 });
   }
 
-  const filePath = path.join(CLASSROOMS_DIR, classroomId, ...pathSegments);
-  const resolvedBase = path.resolve(CLASSROOMS_DIR, classroomId);
+  const assetRoot = classroomAssetRoot(classroomId);
+  const filePath = path.join(assetRoot, ...pathSegments);
+  const resolvedBase = path.resolve(assetRoot);
 
   try {
     // Resolve symlinks and verify the real path stays within the classroom dir

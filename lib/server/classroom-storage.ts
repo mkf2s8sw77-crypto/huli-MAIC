@@ -2,9 +2,15 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { NextRequest } from 'next/server';
 import type { Scene, Stage } from '@/lib/types/stage';
+import { BASE_PATH } from '@/lib/utils/base-path';
+import {
+  CLASSROOMS_STORAGE_PATH,
+  CLASSROOM_JOBS_STORAGE_PATH,
+  classroomDataFilePath,
+} from '@/lib/server/runtime-paths';
 
-export const CLASSROOMS_DIR = path.join(process.cwd(), 'data', 'classrooms');
-export const CLASSROOM_JOBS_DIR = path.join(process.cwd(), 'data', 'classroom-jobs');
+export const CLASSROOMS_DIR = CLASSROOMS_STORAGE_PATH;
+export const CLASSROOM_JOBS_DIR = CLASSROOM_JOBS_STORAGE_PATH;
 
 async function ensureDir(dir: string) {
   await fs.mkdir(dir, { recursive: true });
@@ -29,9 +35,15 @@ export async function writeJsonFileAtomic(filePath: string, data: unknown) {
 }
 
 export function buildRequestOrigin(req: NextRequest): string {
-  return req.headers.get('x-forwarded-host')
+  const configuredOrigin = (process.env.APP_PUBLIC_ORIGIN || '').trim().replace(/\/+$/, '');
+  if (configuredOrigin) {
+    return BASE_PATH ? `${configuredOrigin}${BASE_PATH}` : configuredOrigin;
+  }
+
+  const origin = req.headers.get('x-forwarded-host')
     ? `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('x-forwarded-host')}`
     : req.nextUrl.origin;
+  return BASE_PATH ? `${origin}${BASE_PATH}` : origin;
 }
 
 export interface PersistedClassroomData {
@@ -46,7 +58,7 @@ export function isValidClassroomId(id: string): boolean {
 }
 
 export async function readClassroom(id: string): Promise<PersistedClassroomData | null> {
-  const filePath = path.join(CLASSROOMS_DIR, `${id}.json`);
+  const filePath = classroomDataFilePath(id);
   try {
     const content = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(content) as PersistedClassroomData;
@@ -74,7 +86,7 @@ export async function persistClassroom(
   };
 
   await ensureClassroomsDir();
-  const filePath = path.join(CLASSROOMS_DIR, `${data.id}.json`);
+  const filePath = classroomDataFilePath(data.id);
   await writeJsonFileAtomic(filePath, classroomData);
 
   return {

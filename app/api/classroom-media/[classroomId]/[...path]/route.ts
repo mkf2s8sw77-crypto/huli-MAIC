@@ -3,6 +3,9 @@ import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidClassroomId } from '@/lib/server/classroom-storage';
 import { classroomAssetRoot } from '@/lib/server/runtime-paths';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ClassroomMedia');
 
 const MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -85,6 +88,10 @@ export async function GET(
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+    log.error(
+      `Classroom media serving failed [classroomId=${classroomId}, path=${joined}]:`,
+      error,
+    );
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

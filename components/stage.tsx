@@ -681,7 +681,6 @@ export function Stage({
   const handleWhiteboardToggle = () => {
     setWhiteboardOpen(!whiteboardOpen);
   };
-
   // Map engine mode to the CanvasArea's expected engine state
   const canvasEngineState = (() => {
     switch (engineMode) {

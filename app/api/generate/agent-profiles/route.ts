@@ -12,25 +12,11 @@ import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
 import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
+import { AGENT_COLOR_PALETTE } from '@/lib/constants/agent-defaults';
 
 const log = createLogger('Agent Profiles API');
 
 export const maxDuration = 120;
-
-const COLOR_PALETTE = [
-  '#3b82f6',
-  '#10b981',
-  '#f59e0b',
-  '#ec4899',
-  '#06b6d4',
-  '#8b5cf6',
-  '#f97316',
-  '#14b8a6',
-  '#e11d48',
-  '#6366f1',
-  '#84cc16',
-  '#a855f7',
-];
 
 interface RequestBody {
   stageInfo: { name: string; description?: string };
@@ -51,6 +37,8 @@ function stripCodeFences(text: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  let stageName: string | undefined;
+  let modelString: string | undefined;
   try {
     const body = (await req.json()) as RequestBody;
     const {
@@ -61,6 +49,7 @@ export async function POST(req: NextRequest) {
       avatarDescriptions,
       availableVoices,
     } = body;
+    stageName = stageInfo?.name;
 
     // ── Validate required fields ──
     if (!stageInfo?.name) {
@@ -78,7 +67,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Model resolution from request headers ──
-    const { model: languageModel, modelString } = resolveModelFromHeaders(req);
+    const { model: languageModel, modelString: _modelString } = resolveModelFromHeaders(req);
+    modelString = _modelString;
 
     // ── Build prompt ──
     const sceneSummary = sceneOutlines?.length
@@ -125,7 +115,7 @@ Requirements:
   - Pick an avatar that visually matches the agent's personality and role
   - Try to use different avatars for each agent
   - Use the "path" value as the avatar field in the output
-- Each agent must be assigned one color from this list: ${JSON.stringify(COLOR_PALETTE)}
+- Each agent must be assigned one color from this list: ${JSON.stringify(AGENT_COLOR_PALETTE)}
   - Each agent must have a different color
 ${voicePrompt}
 
@@ -208,27 +198,30 @@ Return a JSON object with this exact structure:
         }
       }
 
-        return {
-          id: `gen-${nanoid(8)}`,
-          name: agent.name,
+      return {
+        id: `gen-${nanoid(8)}`,
+        name: agent.name,
+        role: agent.role,
+        persona: agent.persona,
+        avatar: normalizeAgentAvatar(agent.avatar, {
           role: agent.role,
-          persona: agent.persona,
-          avatar: normalizeAgentAvatar(agent.avatar, {
-            role: agent.role,
-            fallback: normalizedAvailableAvatars[index % normalizedAvailableAvatars.length],
-          }),
-          color: agent.color || COLOR_PALETTE[index % COLOR_PALETTE.length],
-          priority:
-            agent.priority ?? (agent.role === 'teacher' ? 10 : agent.role === 'assistant' ? 7 : 5),
-          ...(voiceConfig ? { voiceConfig } : {}),
-        };
-      });
+          fallback: normalizedAvailableAvatars[index % normalizedAvailableAvatars.length],
+        }),
+        color: agent.color || AGENT_COLOR_PALETTE[index % AGENT_COLOR_PALETTE.length],
+        priority:
+          agent.priority ?? (agent.role === 'teacher' ? 10 : agent.role === 'assistant' ? 7 : 5),
+        ...(voiceConfig ? { voiceConfig } : {}),
+      };
+    });
 
     log.info(`Successfully generated ${agents.length} agent profiles for "${stageInfo.name}"`);
 
     return apiSuccess({ agents });
   } catch (error) {
-    log.error('Agent profiles generation error:', error);
+    log.error(
+      `Agent profiles generation failed [stage="${stageName ?? 'unknown'}", model=${modelString ?? 'unknown'}]:`,
+      error,
+    );
     return apiError('INTERNAL_ERROR', 500, error instanceof Error ? error.message : String(error));
   }
 }

@@ -92,6 +92,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'glm-tts': t('settings.providerGLMTTS'),
     'qwen-tts': t('settings.providerQwenTTS'),
     'tencent-tts': t('settings.providerTencentTTS'),
+    'doubao-tts': t('settings.providerDoubaoTTS'),
     'minimax-tts': t('settings.providerMiniMaxTTS'),
     'elevenlabs-tts': t('settings.providerElevenLabsTTS'),
     'browser-native-tts': t('settings.providerBrowserNativeTTS'),
@@ -277,6 +278,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
       await startPreview({
         text: t('settings.ttsTestTextDefault'),
         providerId: ttsProviderId,
+        modelId: providerConfig?.modelId,
         voice: ttsVoice,
         speed: ttsSpeed,
         apiKey: providerConfig?.apiKey,

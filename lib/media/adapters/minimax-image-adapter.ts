@@ -1,11 +1,7 @@
 /**
  * MiniMax Image Generation Adapter
- *
- * Uses MiniMax synchronous image generation API.
- * Endpoint: https://api.minimaxi.com/v1/image_generation
- *
- * Docs:
- * - https://platform.minimaxi.com/docs/guides/image-generation.md
+ * Supports: text-to-image with aspect ratio control
+ * API Docs: https://platform.minimaxi.com/docs/api-reference/image-generation-t2i
  */
 
 import type {
@@ -14,112 +10,101 @@ import type {
   ImageGenerationResult,
 } from '../types';
 
-const DEFAULT_MODEL = 'image-01';
-const DEFAULT_BASE_URL = 'https://api.minimaxi.com';
-
-async function parseError(response: Response, fallback: string): Promise<string> {
-  const text = await response.text().catch(() => fallback);
-  try {
-    const data = JSON.parse(text);
-    return data?.base_resp?.status_msg || data?.message || text || fallback;
-  } catch {
-    return text || fallback;
-  }
-}
-
-export async function testMiniMaxImageConnectivity(
-  config: ImageGenerationConfig,
-): Promise<{ success: boolean; message: string }> {
-  const baseUrl = config.baseUrl || DEFAULT_BASE_URL;
-  try {
-    const response = await fetch(`${baseUrl}/v1/image_generation`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: config.model || DEFAULT_MODEL,
-        prompt: '',
-        aspect_ratio: '1:1',
-        response_format: 'base64',
-      }),
-    });
-
-    if (response.status === 401 || response.status === 403) {
-      return {
-        success: false,
-        message: `MiniMax image auth failed (${response.status}): ${await parseError(
-          response,
-          'Unauthorized',
-        )}`,
-      };
-    }
-
-    return { success: true, message: 'Connected to MiniMax image generation' };
-  } catch (err) {
-    return { success: false, message: `MiniMax image connectivity error: ${err}` };
-  }
-}
+const BASE_URL = 'https://api.minimaxi.com';
 
 export async function generateWithMiniMaxImage(
   config: ImageGenerationConfig,
   options: ImageGenerationOptions,
 ): Promise<ImageGenerationResult> {
-  const baseUrl = config.baseUrl || DEFAULT_BASE_URL;
+  const baseUrl = (config.baseUrl || BASE_URL).replace(/\/$/, '');
+  const model = config.model || 'image-01';
+  const aspectRatio = options.aspectRatio || '1:1';
 
   const response = await fetch(`${baseUrl}/v1/image_generation`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
     },
     body: JSON.stringify({
-      model: config.model || DEFAULT_MODEL,
+      model,
       prompt: options.prompt,
-      aspect_ratio: options.aspectRatio || '1:1',
-      response_format: 'base64',
-      ...(options.negativePrompt ? { negative_prompt: options.negativePrompt } : {}),
+      negative_prompt: options.negativePrompt,
+      aspect_ratio: aspectRatio,
+      response_format: 'url',
+      n: 1,
+      prompt_optimizer: false,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(
-      `MiniMax image generation failed (${response.status}): ${await parseError(
-        response,
-        response.statusText,
-      )}`,
-    );
+    const errText = await response.text().catch(() => response.statusText);
+    throw new Error(`MiniMax Image API error: ${errText}`);
   }
 
   const data = await response.json();
-  const base64 = data?.data?.image_base64?.[0];
-  if (!base64) {
-    throw new Error('MiniMax image response missing image_base64');
+  if (data?.base_resp?.status_code !== 0 && data?.base_resp?.status_code !== undefined) {
+    const code = data.base_resp.status_code;
+    const msg = data.base_resp.status_msg || 'unknown error';
+    throw new Error(`MiniMax Image API error ${code}: ${msg}`);
   }
 
-  const width =
-    options.width ||
-    (options.aspectRatio === '16:9'
-      ? 1280
-      : options.aspectRatio === '9:16'
-        ? 720
-        : options.aspectRatio === '4:3'
-          ? 1024
-          : 1024);
-  const height =
-    options.height ||
-    (options.aspectRatio === '16:9'
-      ? 720
-      : options.aspectRatio === '9:16'
-        ? 1280
-        : options.aspectRatio === '4:3'
-          ? 768
-          : 1024);
+  const imageUrls = data?.data?.image_urls;
+  if (!imageUrls || imageUrls.length === 0) {
+    throw new Error(`MiniMax Image: no image URLs returned. Response: ${JSON.stringify(data)}`);
+  }
+
+  const imageUrl = imageUrls[0];
+
+  let width = options.width || 1024;
+  let height = options.height || 1024;
+  if (!options.width && !options.height) {
+    const [w, h] = aspectRatio.split(':').map(Number);
+    if (w && h) {
+      if (w > h) {
+        width = 1024;
+        height = Math.round((1024 * h) / w);
+      } else {
+        height = 1024;
+        width = Math.round((1024 * w) / h);
+      }
+    }
+  }
 
   return {
-    base64,
+    url: imageUrl,
     width,
     height,
   };
+}
+
+export async function testMiniMaxImageConnectivity(
+  config: ImageGenerationConfig,
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const baseUrl = (config.baseUrl || BASE_URL).replace(/\/$/, '');
+    const response = await fetch(`${baseUrl}/v1/image_generation`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: JSON.stringify({
+        model: 'image-01',
+        prompt: 'test',
+        aspect_ratio: '1:1',
+        n: 1,
+      }),
+    });
+
+    if (response.ok) {
+      return { success: true, message: 'MiniMax Image API connected' };
+    }
+
+    const errData = await response.json().catch(() => ({}));
+    const msg = errData?.base_resp?.status_msg || response.statusText;
+    return { success: false, message: `API error: ${msg}` };
+  } catch (err) {
+    return { success: false, message: `Connection failed: ${(err as Error).message}` };
+  }
 }

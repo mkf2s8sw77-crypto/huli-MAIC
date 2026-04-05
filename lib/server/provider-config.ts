@@ -57,6 +57,7 @@ const TTS_ENV_MAP: Record<string, string> = {
   TTS_GLM: 'glm-tts',
   TTS_QWEN: 'qwen-tts',
   TTS_MINIMAX: 'minimax-tts',
+  TTS_DOUBAO: 'doubao-tts',
   TTS_ELEVENLABS: 'elevenlabs-tts',
 };
 
@@ -93,6 +94,7 @@ const VIDEO_ENV_MAP: Record<string, string> = {
   VIDEO_KLING: 'kling',
   VIDEO_VEO: 'veo',
   VIDEO_SORA: 'sora',
+  VIDEO_MINIMAX: 'minimax-video',
   VIDEO_GROK: 'grok-video',
 };
 

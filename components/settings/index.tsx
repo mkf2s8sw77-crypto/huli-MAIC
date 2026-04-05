@@ -128,6 +128,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'glm-tts': t('settings.providerGLMTTS'),
     'qwen-tts': t('settings.providerQwenTTS'),
     'tencent-tts': t('settings.providerTencentTTS'),
+    'doubao-tts': t('settings.providerDoubaoTTS'),
     'minimax-tts': t('settings.providerMiniMaxTTS'),
     'elevenlabs-tts': t('settings.providerElevenLabsTTS'),
     'browser-native-tts': t('settings.providerBrowserNativeTTS'),
@@ -166,6 +167,7 @@ const VIDEO_PROVIDER_NAMES: Record<VideoProviderId, string> = {
   kling: 'providerKling',
   veo: 'providerVeo',
   sora: 'providerSora',
+  'minimax-video': 'providerMiniMaxVideo',
   'grok-video': 'providerGrokVideo',
 };
 
@@ -174,6 +176,7 @@ const VIDEO_PROVIDER_ICONS: Record<VideoProviderId, string> = {
   kling: '/logos/kling.svg',
   veo: '/logos/gemini.svg',
   sora: '/logos/openai.svg',
+  'minimax-video': '/logos/minimax.svg',
   'grok-video': '/logos/grok.svg',
 };
 
@@ -1044,6 +1047,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
         baseUrl={providersConfig[selectedProviderId]?.baseUrl}
         providerType={providersConfig[selectedProviderId]?.type}
         requiresApiKey={providersConfig[selectedProviderId]?.requiresApiKey}
+        isServerConfigured={providersConfig[selectedProviderId]?.isServerConfigured}
       />
 
       {/* Add Provider Dialog */}

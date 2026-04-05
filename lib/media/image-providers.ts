@@ -76,7 +76,10 @@ export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
     name: 'MiniMax Image',
     requiresApiKey: true,
     defaultBaseUrl: 'https://api.minimaxi.com',
-    models: [{ id: 'image-01', name: 'MiniMax Image 01' }],
+    models: [
+      { id: 'image-01', name: 'Image 01' },
+      { id: 'image-01-live', name: 'Image 01 Live' },
+    ],
     supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
   },
   'grok-image': {

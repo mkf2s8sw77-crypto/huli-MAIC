@@ -1,17 +1,17 @@
 /**
  * Stage Storage Manager
  *
- * Manages multiple stage data in IndexedDB
- * Each stage has its own storage key based on stageId
+ * Phase 3: 所有业务数据真源均为服务端 SQLite。
+ * 聊天、大纲、播放状态、Agent、媒体全部通过 API 读写。
+ * 不再依赖 IndexedDB。
  */
 
-import { Stage, Scene } from '../types/stage';
-import { ChatSession } from '../types/chat';
-import { db } from './database';
-import { saveChatSessions, loadChatSessions, deleteChatSessions } from './chat-storage';
-import { clearPlaybackState } from './playback-storage';
+import type { Stage, Scene } from '../types/stage';
+import type { ChatSession } from '../types/chat';
+import { saveChatSessions, loadChatSessions } from './chat-storage';
 import { createLogger } from '@/lib/logger';
 import { DEFAULT_VIEWPORT_PRESET, getViewportOption } from '@/lib/config/viewport';
+import { withBasePath } from '@/lib/utils/base-path';
 
 const log = createLogger('StageStorage');
 
@@ -29,48 +29,30 @@ export interface StageListItem {
   sceneCount: number;
   createdAt: number;
   updatedAt: number;
+  firstSlideCanvas?: Record<string, unknown> | null;
 }
 
 /**
- * Save stage data to IndexedDB
+ * Save stage data — stage/scenes to server, chats to server
  */
 export async function saveStageData(stageId: string, data: StageStoreData): Promise<void> {
   try {
-    const now = Date.now();
-
-    // Save to stages table
-    await db.stages.put({
-      id: stageId,
-      name: data.stage.name || 'Untitled Stage',
-      description: data.stage.description,
-      createdAt: data.stage.createdAt || now,
-      updatedAt: now,
-      language: data.stage.language,
-      style: data.stage.style,
-      viewportPreset: data.stage.viewportPreset,
-      viewportSize: data.stage.viewportSize,
-      viewportRatio: data.stage.viewportRatio,
-      currentSceneId: data.currentSceneId || undefined,
-      agentIds: data.stage.agentIds,
+    const res = await fetch(withBasePath(`/api/stages/${encodeURIComponent(stageId)}`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stage: data.stage,
+        scenes: data.scenes,
+        currentSceneId: data.currentSceneId,
+      }),
     });
 
-    // Delete old scenes first to avoid orphaned data
-    await db.scenes.where('stageId').equals(stageId).delete();
-
-    // Save new scenes
-    if (data.scenes && data.scenes.length > 0) {
-      await db.scenes.bulkPut(
-        data.scenes.map((scene, index) => ({
-          ...scene,
-          stageId,
-          order: scene.order ?? index,
-          createdAt: scene.createdAt || now,
-          updatedAt: scene.updatedAt || now,
-        })),
-      );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      log.error('Server save failed:', err);
+      throw new Error(err.error || `HTTP ${res.status}`);
     }
 
-    // Save chat sessions to independent table
     if (data.chats) {
       await saveChatSessions(stageId, data.chats);
     }
@@ -83,32 +65,45 @@ export async function saveStageData(stageId: string, data: StageStoreData): Prom
 }
 
 /**
- * Load stage data from IndexedDB
+ * Load stage data — everything from server
  */
 export async function loadStageData(stageId: string): Promise<StageStoreData | null> {
   try {
-    // Load stage
-    const stage = await db.stages.get(stageId);
-    if (!stage) {
+    const res = await fetch(
+      withBasePath(`/api/stages/${encodeURIComponent(stageId)}`),
+    );
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        log.info(`Stage not found on server: ${stageId}`);
+        return null;
+      }
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+
+    const json = await res.json();
+    if (!json.success || !json.stage) {
       log.info(`Stage not found: ${stageId}`);
       return null;
     }
 
-    // Load scenes
-    const scenes = await db.scenes.where('stageId').equals(stageId).sortBy('order');
+    const stage: Stage = {
+      ...json.stage,
+      viewportPreset: getViewportOption(
+        json.stage.viewportPreset || DEFAULT_VIEWPORT_PRESET,
+      ).id,
+    };
+    const scenes: Scene[] = json.scenes || [];
 
-    // Load chat sessions from independent table
     const chats = await loadChatSessions(stageId);
 
     log.info(`Loaded stage: ${stageId}, scenes: ${scenes.length}, chats: ${chats.length}`);
 
     return {
-      stage: {
-        ...stage,
-        viewportPreset: getViewportOption(stage.viewportPreset || DEFAULT_VIEWPORT_PRESET).id,
-      },
+      stage,
       scenes,
-      currentSceneId: stage.currentSceneId || scenes[0]?.id || null,
+      currentSceneId: json.stage.currentSceneId || scenes[0]?.id || null,
       chats,
     };
   } catch (error) {
@@ -118,19 +113,19 @@ export async function loadStageData(stageId: string): Promise<StageStoreData | n
 }
 
 /**
- * Delete stage and all related data
+ * Delete stage — server handles cascade for all related data (chats, outlines, media, agents)
  */
 export async function deleteStageData(stageId: string): Promise<void> {
   try {
-    // Delete stage
-    await db.stages.delete(stageId);
+    const res = await fetch(
+      withBasePath(`/api/stages/${encodeURIComponent(stageId)}`),
+      { method: 'DELETE' },
+    );
 
-    // Delete scenes
-    await db.scenes.where('stageId').equals(stageId).delete();
-
-    // Delete chat sessions and playback state
-    await deleteChatSessions(stageId);
-    await clearPlaybackState(stageId);
+    if (!res.ok && res.status !== 404) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
 
     log.info(`Deleted stage: ${stageId}`);
   } catch (error) {
@@ -140,28 +135,18 @@ export async function deleteStageData(stageId: string): Promise<void> {
 }
 
 /**
- * List all stages
+ * List all stages for the current user
  */
 export async function listStages(): Promise<StageListItem[]> {
   try {
-    const stages = await db.stages.orderBy('updatedAt').reverse().toArray();
+    const res = await fetch(withBasePath('/api/stages'));
+    if (!res.ok) {
+      log.error('Failed to list stages:', res.status);
+      return [];
+    }
 
-    const stageList: StageListItem[] = await Promise.all(
-      stages.map(async (stage) => {
-        const sceneCount = await db.scenes.where('stageId').equals(stage.id).count();
-
-        return {
-          id: stage.id,
-          name: stage.name,
-          description: stage.description,
-          sceneCount,
-          createdAt: stage.createdAt,
-          updatedAt: stage.updatedAt,
-        };
-      }),
-    );
-
-    return stageList;
+    const json = await res.json();
+    return (json.stages || []) as StageListItem[];
   } catch (error) {
     log.error('Failed to list stages:', error);
     return [];
@@ -169,55 +154,66 @@ export async function listStages(): Promise<StageListItem[]> {
 }
 
 /**
- * Get first slide scene's canvas data for each stage (for thumbnail preview).
- * Also resolves gen_img_* placeholders from mediaFiles so thumbnails show real images.
- * Returns a map of stageId -> Slide (canvas data with resolved images)
+ * Get first slide canvas for thumbnails.
+ *
+ * Phase 3: Media placeholder resolution uses server-side media URLs.
  */
 export async function getFirstSlideByStages(
   stageIds: string[],
+  stageList?: StageListItem[],
 ): Promise<Record<string, import('../types/slides').Slide>> {
   const result: Record<string, import('../types/slides').Slide> = {};
-  try {
-    await Promise.all(
-      stageIds.map(async (stageId) => {
-        const scenes = await db.scenes.where('stageId').equals(stageId).sortBy('order');
-        const firstSlide = scenes.find((s) => s.content?.type === 'slide');
-        if (firstSlide && firstSlide.content.type === 'slide') {
-          const slide = structuredClone(firstSlide.content.canvas);
 
-          // Resolve gen_img_* placeholders from mediaFiles
-          const placeholderEls = slide.elements.filter(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (el: any) => el.type === 'image' && /^gen_(img|vid)_[\w-]+$/i.test(el.src as string),
+  try {
+    for (const stageId of stageIds) {
+      const item = stageList?.find((s) => s.id === stageId);
+      if (!item?.firstSlideCanvas) continue;
+
+      const slide = structuredClone(item.firstSlideCanvas) as unknown as import('../types/slides').Slide;
+      if (!slide?.elements) continue;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const placeholderEls = slide.elements.filter((el: any) =>
+        el.type === 'image' && /^gen_(img|vid)_[\w-]+$/i.test(el.src as string),
+      );
+
+      if (placeholderEls.length > 0) {
+        try {
+          const mediaRes = await fetch(
+            withBasePath(`/api/stages/${encodeURIComponent(stageId)}/media`),
           );
-          if (placeholderEls.length > 0) {
-            const mediaRecords = await db.mediaFiles.where('stageId').equals(stageId).toArray();
-            const mediaMap = new Map(
-              mediaRecords.map((r) => {
-                // Key format: stageId:elementId → extract elementId
-                const elementId = r.id.includes(':') ? r.id.split(':').slice(1).join(':') : r.id;
-                return [elementId, r.blob] as const;
-              }),
-            );
-            for (const el of placeholderEls as Array<{ src: string }>) {
-              const blob = mediaMap.get(el.src);
-              if (blob) {
-                el.src = URL.createObjectURL(blob);
-              } else {
-                // Clear unresolved placeholder so BaseImageElement won't subscribe
-                // to the global media store (which may have stale data from another course)
-                el.src = '';
+          if (mediaRes.ok) {
+            const mediaJson = await mediaRes.json();
+            const mediaMap = new Map<string, string>();
+            for (const f of mediaJson.files || []) {
+              if (f.storageKey) {
+                mediaMap.set(f.elementId, withBasePath(`/api/media/${f.storageKey}`));
+              } else if (f.ossKey) {
+                mediaMap.set(f.elementId, f.ossKey);
               }
             }
+            for (const el of placeholderEls as Array<{ src: string }>) {
+              const url = mediaMap.get(el.src);
+              el.src = url || '';
+            }
+          } else {
+            for (const el of placeholderEls as Array<{ src: string }>) {
+              el.src = '';
+            }
           }
-
-          result[stageId] = slide;
+        } catch {
+          for (const el of placeholderEls as Array<{ src: string }>) {
+            el.src = '';
+          }
         }
-      }),
-    );
+      }
+
+      result[stageId] = slide;
+    }
   } catch (error) {
     log.error('Failed to load thumbnails:', error);
   }
+
   return result;
 }
 
@@ -239,10 +235,12 @@ export async function renameStage(stageId: string, newName: string): Promise<voi
  */
 export async function stageExists(stageId: string): Promise<boolean> {
   try {
-    const stage = await db.stages.get(stageId);
-    return !!stage;
-  } catch (error) {
-    log.error('Failed to check stage existence:', error);
+    const res = await fetch(
+      withBasePath(`/api/stages/${encodeURIComponent(stageId)}`),
+      { method: 'GET' },
+    );
+    return res.ok;
+  } catch {
     return false;
   }
 }

@@ -24,6 +24,7 @@ CLAUDE.local.md
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+/.playwright-cli/
 
 # next.js
 /.next/
@@ -65,8 +66,11 @@ next-env.d.ts
 # worktrees
 .worktrees
 
-# generated data
+# generated data & SQLite database
 /data
+*.db
+*.db-journal
+*.db-wal
 /logs
 
 # docs

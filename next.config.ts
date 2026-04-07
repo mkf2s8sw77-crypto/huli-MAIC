@@ -56,7 +56,7 @@ const nextConfig: NextConfig = {
   trailingSlash,
   output: process.env.VERCEL ? undefined : 'standalone',
   transpilePackages: ['mathml2omml', 'pptxgenjs'],
-  serverExternalPackages: [],
+  serverExternalPackages: ['better-sqlite3'],
   experimental: {
     proxyClientMaxBodySize: '200mb',
   },

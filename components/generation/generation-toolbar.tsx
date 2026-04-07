@@ -23,6 +23,7 @@ import type { SettingsSection } from '@/lib/types/settings';
 import { MediaPopover } from '@/components/generation/media-popover';
 import { withBasePath } from '@/lib/utils/base-path';
 import { VIEWPORT_OPTIONS, type ViewportPreset } from '@/lib/config/viewport';
+import { HIDE_SETTINGS_UI } from '@/lib/config/frontend-controls';
 
 // ─── Constants ───────────────────────────────────────────────
 const MAX_PDF_SIZE_MB = 50;
@@ -121,37 +122,41 @@ export function GenerationToolbar({
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
-      {/* ── Model selector ── */}
-      {configuredProviders.length > 0 ? (
-        <ModelSelectorPopover
-          configuredProviders={configuredProviders}
-          currentProviderId={currentProviderId}
-          currentModelId={currentModelId}
-          currentProviderConfig={currentProviderConfig}
-          setModel={setModel}
-          t={t}
-        />
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => onSettingsOpen('providers')}
-              className={cn(
-                pillCls,
-                'text-amber-600 dark:text-amber-400 animate-pulse',
-                'bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50',
-              )}
-            >
-              <Bot className="size-3.5" />
-              <span>{t('toolbar.configureProvider')}</span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>{t('toolbar.configureProviderHint')}</TooltipContent>
-        </Tooltip>
-      )}
+      {!HIDE_SETTINGS_UI && (
+        <>
+          {/* ── Model selector ── */}
+          {configuredProviders.length > 0 ? (
+            <ModelSelectorPopover
+              configuredProviders={configuredProviders}
+              currentProviderId={currentProviderId}
+              currentModelId={currentModelId}
+              currentProviderConfig={currentProviderConfig}
+              setModel={setModel}
+              t={t}
+            />
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => onSettingsOpen('providers')}
+                  className={cn(
+                    pillCls,
+                    'text-amber-600 dark:text-amber-400 animate-pulse',
+                    'bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50',
+                  )}
+                >
+                  <Bot className="size-3.5" />
+                  <span>{t('toolbar.configureProvider')}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{t('toolbar.configureProviderHint')}</TooltipContent>
+            </Tooltip>
+          )}
 
-      {/* ── Separator ── */}
-      <div className="w-px h-4 bg-border/60 mx-1" />
+          {/* ── Separator ── */}
+          <div className="w-px h-4 bg-border/60 mx-1" />
+        </>
+      )}
 
       {/* ── PDF (parser + upload) combined Popover ── */}
       <Popover>
@@ -408,11 +413,15 @@ export function GenerationToolbar({
         <TooltipContent>{t('toolbar.viewportPresetHint')}</TooltipContent>
       </Tooltip>
 
-      {/* ── Separator ── */}
-      <div className="w-px h-4 bg-border/60 mx-1" />
+      {!HIDE_SETTINGS_UI && (
+        <>
+          {/* ── Separator ── */}
+          <div className="w-px h-4 bg-border/60 mx-1" />
 
-      {/* ── Media popover ── */}
-      <MediaPopover onSettingsOpen={onSettingsOpen} />
+          {/* ── Media popover ── */}
+          <MediaPopover onSettingsOpen={onSettingsOpen} />
+        </>
+      )}
     </div>
   );
 }

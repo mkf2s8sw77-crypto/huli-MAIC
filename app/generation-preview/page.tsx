@@ -29,7 +29,6 @@ import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generatio
 import { AgentRevealModal } from '@/components/agent/agent-reveal-modal';
 import { ServerProvidersInit } from '@/components/server-providers-init';
 import { createLogger } from '@/lib/logger';
-import { withBasePath } from '@/lib/utils/base-path';
 import { navigateToAppHome } from '@/lib/utils/navigation';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
@@ -774,28 +773,10 @@ function GenerationPreviewContent() {
       );
 
       sessionStorage.removeItem('generationSession');
-      await store.saveToStorage();
 
-      // Persist the initial classroom snapshot server-side as well, so reloading
-      // /classroom/:id can recover even when IndexedDB state is unavailable.
-      // This snapshot may contain only the first generated scene; the classroom
-      // page will continue generation client-side using outlines/session params.
-      try {
-        const persistedState = useStageStore.getState();
-        if (persistedState.stage && persistedState.scenes.length > 0) {
-          await fetch(withBasePath('/api/classroom'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              stage: persistedState.stage,
-              scenes: persistedState.scenes,
-            }),
-            signal,
-          });
-        }
-      } catch (persistErr) {
-        log.warn('[GenerationPreview] Failed to persist classroom snapshot to server:', persistErr);
-      }
+      // Persist stage + scenes to server-side SQLite (the new primary storage).
+      // saveToStorage() calls PUT /api/stages/:id which upserts the stage and scenes.
+      await store.saveToStorage();
 
       router.push(`/classroom/${stage.id}`);
     } catch (err) {

@@ -1,69 +1,15 @@
-import { after, type NextRequest } from 'next/server';
-import { nanoid } from 'nanoid';
-import { apiError, apiSuccess } from '@/lib/server/api-response';
-import { type GenerateClassroomInput } from '@/lib/server/classroom-generation';
-import { runClassroomGenerationJob } from '@/lib/server/classroom-job-runner';
-import { createClassroomGenerationJob } from '@/lib/server/classroom-job-store';
-import { buildRequestOrigin } from '@/lib/server/classroom-storage';
-import { createLogger } from '@/lib/logger';
+/**
+ * Legacy classroom generation API — DISABLED
+ *
+ * 此端点属于上游遗留的文件型课程生成，不走 SQLite + owner 校验。
+ * 当前 fork 已通过 /api/stages + generation-preview 流程实现完整账号体系。
+ * 保留文件以降低与 upstream 合并冲突。
+ */
 
-const log = createLogger('GenerateClassroom API');
-
-export const maxDuration = 30;
-
-export async function POST(req: NextRequest) {
-  let requirementSnippet: string | undefined;
-  try {
-    const rawBody = (await req.json()) as Partial<GenerateClassroomInput>;
-    requirementSnippet = rawBody.requirement?.substring(0, 60);
-    const body: GenerateClassroomInput = {
-      requirement: rawBody.requirement || '',
-      ...(rawBody.pdfContent ? { pdfContent: rawBody.pdfContent } : {}),
-      ...(rawBody.language ? { language: rawBody.language } : {}),
-      ...(rawBody.enableWebSearch != null ? { enableWebSearch: rawBody.enableWebSearch } : {}),
-      ...(rawBody.enableImageGeneration != null
-        ? { enableImageGeneration: rawBody.enableImageGeneration }
-        : {}),
-      ...(rawBody.enableVideoGeneration != null
-        ? { enableVideoGeneration: rawBody.enableVideoGeneration }
-        : {}),
-      ...(rawBody.enableTTS != null ? { enableTTS: rawBody.enableTTS } : {}),
-      ...(rawBody.agentMode ? { agentMode: rawBody.agentMode } : {}),
-    };
-    const { requirement } = body;
-
-    if (!requirement) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: requirement');
-    }
-
-    const baseUrl = buildRequestOrigin(req);
-    const jobId = nanoid(10);
-    const job = await createClassroomGenerationJob(jobId, body);
-    const pollUrl = `${baseUrl}/api/generate-classroom/${jobId}`;
-
-    after(() => runClassroomGenerationJob(jobId, body, baseUrl));
-
-    return apiSuccess(
-      {
-        jobId,
-        status: job.status,
-        step: job.step,
-        message: job.message,
-        pollUrl,
-        pollIntervalMs: 5000,
-      },
-      202,
-    );
-  } catch (error) {
-    log.error(
-      `Classroom generation job creation failed [requirement="${requirementSnippet ?? 'unknown'}..."]:`,
-      error,
-    );
-    return apiError(
-      'INTERNAL_ERROR',
-      500,
-      'Failed to create classroom generation job',
-      error instanceof Error ? error.message : 'Unknown error',
-    );
-  }
+import { NextResponse } from 'next/server';
+export async function POST() {
+  return NextResponse.json(
+    { success: false, error: 'This endpoint has been replaced by the stages-based generation flow' },
+    { status: 410 },
+  );
 }

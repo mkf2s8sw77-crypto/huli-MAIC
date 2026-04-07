@@ -100,7 +100,7 @@
 - 大规模重命名
 - 无必要的文件搬迁
 - 批量格式化上游核心文件
-- 只为“看起来更整齐”而做的重构
+- 只为"看起来更整齐"而做的重构
 
 因为这些都会显著增加与 upstream 合并冲突。
 
@@ -145,7 +145,7 @@
 
 相关路径兼容性是长期要求，不是一次性部署技巧。
 
-所有“回首页”入口也必须走统一 helper 或 `withBasePath('/')`，不要手写 `/`，
+所有"回首页"入口也必须走统一 helper 或 `withBasePath('/')`，不要手写 `/`，
 避免在子路径部署下出现 `/maic/maic` 这类重复拼接。
 
 ### 5.2 媒体能力是服务端统一编排
@@ -261,7 +261,7 @@ agent 头像不是完全可信输入。
 
 ### 5.5 `dev` 预发布走共享 gateway
 
-当前这台机器上的预发布环境，不是“一个项目一个独立 host 文件”，而是：
+当前这台机器上的预发布环境，不是"一个项目一个独立 host 文件"，而是：
 
 - 一个共享 host：`dev.huli.sh.cn`
 - 一个本机共享 gateway 文件：`/opt/homebrew/etc/nginx/servers/dev-huli-gateway.conf`
@@ -275,15 +275,38 @@ agent 头像不是完全可信输入。
 - `dev-huli-gateway-tunnel` 的 PM2 工作目录已迁到 `/Users/huli-dev/.infra/dev-huli-gateway`；旧的 `Documents/_infra` 不再是这条 tunnel 的依赖路径
 - MAIC 当前对子路径的规范化是 `/maic/ -> /maic`；共享 gateway 上 `location = /maic` 必须直接代理 upstream，不能再强制跳回 `/maic/`
 
-### 5.6 当前没有中心化账号体系
+### 5.6 账号体系与数据持久化（Phase 1-3 已全部落地）
 
-当前用户身份是浏览器本地 profile，不是服务端账号系统：
+基于 Auth.js + SQLite + Drizzle ORM 的完整账号与数据体系。
 
-- 用户资料仅包含 `avatar / nickname / bio`，保存在 `localStorage`
-- 课程、聊天、媒体等数据保存在浏览器 `IndexedDB`
-- 当前不存在注册 / 登录 / 组织 / 权限分级 / 多用户隔离表结构
+**Phase 1** — 账号体系：登录（邮箱+密码）、JWT 30 天有效期、用户资料真源在服务端。
 
-如果后续要接入真实账号体系，必须先明确本地数据迁移与兼容策略，不能默认把当前本地 profile 当成可鉴权账号。
+**Phase 2** — 课程与场景：stages / scenes 表，按 userId 归属，owner 校验。
+
+**Phase 3** — 全部业务数据服务端化：
+- chatSessions / stageOutlines / playbackState / generatedAgents / mediaFiles
+- 媒体：SQLite 存元数据，实体文件存 `data/media/`，通过 `/api/media/` 访问
+- 所有业务表通过 stages.id 级联删除；删除课程时同步清理文件系统
+
+**业务主链路不再依赖 IndexedDB 作为真源。** Dexie 仅保留 TTS 音频缓存、PDF 图片缓存、undo/redo 快照（均为 cache）。
+
+安全要点：
+- 媒体文件读写均有路径遍历防护（`assertInsideBase`）
+- 媒体上传在写盘前先做 owner 校验
+- 媒体下载需 owner 校验，Cache-Control 为 `private`
+- 旧的 `/api/classroom` 和 `/api/generate-classroom` 已返回 410 Gone（保留文件减少 upstream 冲突）
+
+关键文件：
+- `lib/server/db/schema.ts` — Drizzle schema（11 张表）
+- `lib/server/db/*-repository.ts` — 各业务 DAL
+- `lib/server/media-storage.ts` — 文件系统媒体存储（含 path traversal guard）
+- `app/api/stages/[id]/{chats,outlines,playback,agents,media}/` — 子资源 API
+- `app/api/media/[...path]/` — 媒体文件访问（需 owner 校验）
+
+环境变量：
+- `AUTH_SECRET`（必须）— JWT 签名密钥
+- `DATABASE_URL`（可选）— SQLite 路径，默认 `./data/maic.db`
+- `MEDIA_STORAGE_PATH`（可选）— 媒体文件路径，默认 `./data/media`
 
 ---
 

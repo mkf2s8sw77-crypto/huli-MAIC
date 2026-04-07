@@ -1,19 +1,17 @@
 /**
  * Media Generation Store
  *
- * Tracks per-element media generation status (pending → generating → done/failed).
- * Drives skeleton loading in slide renderer components.
- * Persistence is handled by IndexedDB (mediaFiles table), not Zustand middleware.
+ * Phase 3: 持久化真源改为服务端（SQLite 元数据 + 文件系统）。
+ * restoreFromDB 改为从 /api/stages/:id/media 获取，
+ * objectUrl 指向 /api/media/:storageKey。
  */
 
 import { create } from 'zustand';
 import type { MediaGenerationRequest } from '@/lib/media/types';
-import { db } from '@/lib/utils/database';
+import { withBasePath } from '@/lib/utils/base-path';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('MediaGenerationStore');
-
-// ==================== Types ====================
 
 export type MediaTaskStatus = 'pending' | 'generating' | 'done' | 'failed';
 
@@ -27,10 +25,10 @@ export interface MediaTask {
     style?: string;
     duration?: number;
   };
-  objectUrl?: string; // URL.createObjectURL() for rendering
-  poster?: string; // Video poster objectUrl
+  objectUrl?: string;
+  poster?: string;
   error?: string;
-  errorCode?: string; // Structured error code (e.g. 'CONTENT_SENSITIVE')
+  errorCode?: string;
   retryCount: number;
   stageId: string;
 }
@@ -38,37 +36,23 @@ export interface MediaTask {
 interface MediaGenerationState {
   tasks: Record<string, MediaTask>;
 
-  // Batch enqueue
   enqueueTasks: (stageId: string, requests: MediaGenerationRequest[]) => void;
-
-  // Status transitions
   markGenerating: (elementId: string) => void;
   markDone: (elementId: string, objectUrl: string, poster?: string) => void;
   markFailed: (elementId: string, error: string, errorCode?: string) => void;
-
-  // Retry support
   markPendingForRetry: (elementId: string) => void;
 
-  // Queries
   getTask: (elementId: string) => MediaTask | undefined;
   isReady: (elementId: string) => boolean;
 
-  // Restore from IndexedDB on page load
   restoreFromDB: (stageId: string) => Promise<void>;
-
-  // Cleanup
   clearStage: (stageId: string) => void;
   revokeObjectUrls: () => void;
 }
 
-// ==================== Helper ====================
-
-/** Check if a src string is a generated media placeholder ID */
 export function isMediaPlaceholder(src: string): boolean {
   return /^gen_(img|vid)_[\w-]+$/i.test(src);
 }
-
-// ==================== Store ====================
 
 export const useMediaGenerationStore = create<MediaGenerationState>()((set, get) => ({
   tasks: {},
@@ -76,7 +60,6 @@ export const useMediaGenerationStore = create<MediaGenerationState>()((set, get)
   enqueueTasks: (stageId, requests) => {
     const newTasks: Record<string, MediaTask> = {};
     for (const req of requests) {
-      // Skip if already tracked
       if (get().tasks[req.elementId]) continue;
       newTasks[req.elementId] = {
         elementId: req.elementId,
@@ -159,49 +142,66 @@ export const useMediaGenerationStore = create<MediaGenerationState>()((set, get)
 
   restoreFromDB: async (stageId) => {
     try {
-      const records = await db.mediaFiles.where('stageId').equals(stageId).toArray();
+      const res = await fetch(
+        withBasePath(`/api/stages/${encodeURIComponent(stageId)}/media`),
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      const files = json.files || [];
+
       const restored: Record<string, MediaTask> = {};
-      for (const rec of records) {
-        // Extract elementId from compound key (stageId:elementId)
-        const elementId = rec.id.includes(':') ? rec.id.split(':').slice(1).join(':') : rec.id;
-        const params = JSON.parse(rec.params || '{}');
+      for (const rec of files) {
+        const elementId = rec.elementId as string;
+        const params = (rec.params || {}) as Record<string, unknown>;
 
         if (rec.error) {
-          // Restore as failed task (persisted non-retryable error)
           restored[elementId] = {
             elementId,
-            type: rec.type,
+            type: rec.type as 'image' | 'video',
             status: 'failed',
-            prompt: rec.prompt,
-            params,
-            error: rec.error,
-            errorCode: rec.errorCode,
+            prompt: rec.prompt as string,
+            params: params as MediaTask['params'],
+            error: rec.error as string,
+            errorCode: rec.errorCode as string | undefined,
             retryCount: 0,
             stageId,
           };
-        } else {
-          // Re-wrap blob with stored mimeType — IndexedDB may drop Blob.type
-          const blob = rec.blob.type ? rec.blob : new Blob([rec.blob], { type: rec.mimeType });
-          const objectUrl = URL.createObjectURL(blob);
-          const poster = rec.poster ? URL.createObjectURL(rec.poster) : undefined;
+        } else if (rec.storageKey) {
+          const objectUrl = withBasePath(`/api/media/${rec.storageKey}`);
+          const poster = rec.posterStorageKey
+            ? withBasePath(`/api/media/${rec.posterStorageKey}`)
+            : rec.posterOssKey || undefined;
           restored[elementId] = {
             elementId,
-            type: rec.type,
+            type: rec.type as 'image' | 'video',
             status: 'done',
-            prompt: rec.prompt,
-            params,
+            prompt: rec.prompt as string,
+            params: params as MediaTask['params'],
             objectUrl,
             poster,
             retryCount: 0,
             stageId,
           };
+        } else if (rec.ossKey) {
+          restored[elementId] = {
+            elementId,
+            type: rec.type as 'image' | 'video',
+            status: 'done',
+            prompt: rec.prompt as string,
+            params: params as MediaTask['params'],
+            objectUrl: rec.ossKey as string,
+            poster: rec.posterOssKey as string | undefined,
+            retryCount: 0,
+            stageId,
+          };
         }
       }
+
       if (Object.keys(restored).length > 0) {
         set((s) => ({ tasks: { ...s.tasks, ...restored } }));
       }
     } catch (err) {
-      log.error('Failed to restore from DB:', err);
+      log.error('Failed to restore from server:', err);
     }
   },
 
@@ -211,19 +211,12 @@ export const useMediaGenerationStore = create<MediaGenerationState>()((set, get)
       for (const [id, task] of Object.entries(s.tasks)) {
         if (task.stageId !== stageId) {
           remaining[id] = task;
-        } else if (task.objectUrl) {
-          URL.revokeObjectURL(task.objectUrl);
-          if (task.poster) URL.revokeObjectURL(task.poster);
         }
       }
       return { tasks: remaining };
     }),
 
   revokeObjectUrls: () => {
-    const tasks = get().tasks;
-    for (const task of Object.values(tasks)) {
-      if (task.objectUrl) URL.revokeObjectURL(task.objectUrl);
-      if (task.poster) URL.revokeObjectURL(task.poster);
-    }
+    // Server URLs don't need revoking (no blob: URLs anymore)
   },
 }));

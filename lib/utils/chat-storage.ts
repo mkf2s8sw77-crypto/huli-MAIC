@@ -1,81 +1,72 @@
 /**
- * Chat Storage - Persist chat sessions to IndexedDB
+ * Chat Storage — 服务端真源
  *
- * Independent from stage/scene storage cycle.
- * Handles serialization, truncation, and batch writes.
+ * Phase 3: 改为调用 /api/stages/:id/chats，不再依赖 IndexedDB。
+ * 保持原有 API 签名不变。
  */
 
 import type { ChatSession, ChatMessageMetadata, SessionStatus } from '@/lib/types/chat';
 import type { UIMessage } from 'ai';
-import { db, type ChatSessionRecord } from './database';
+import { withBasePath } from '@/lib/utils/base-path';
 
-/** Maximum messages per session to avoid IndexedDB bloat */
 const MAX_MESSAGES_PER_SESSION = 200;
 
-/**
- * Save chat sessions for a stage to IndexedDB.
- * - Active sessions are saved as 'interrupted' (streaming context lost on refresh)
- * - pendingToolCalls are cleared (runtime-only state)
- * - Messages are truncated to MAX_MESSAGES_PER_SESSION
- */
 export async function saveChatSessions(stageId: string, sessions: ChatSession[]): Promise<void> {
-  if (!sessions || sessions.length === 0) {
-    // Delete all sessions for this stage if empty
-    await db.chatSessions.where('stageId').equals(stageId).delete();
-    return;
-  }
-
-  const records: ChatSessionRecord[] = sessions.map((session) => ({
+  const records = sessions.map((session) => ({
     id: session.id,
     stageId,
     type: session.type,
     title: session.title,
-    // Mark active sessions as interrupted (streaming context lost on refresh)
     status: (session.status === 'active' ? 'interrupted' : session.status) as SessionStatus,
-    // Truncate messages and strip non-serializable data
     messages: session.messages.slice(-MAX_MESSAGES_PER_SESSION),
     config: session.config,
     toolCalls: session.toolCalls,
-    pendingToolCalls: [], // Clear runtime state
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
     sceneId: session.sceneId,
     lastActionIndex: session.lastActionIndex,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
   }));
 
-  await db.transaction('rw', db.chatSessions, async () => {
-    // Delete old sessions for this stage, then bulk insert new ones
-    await db.chatSessions.where('stageId').equals(stageId).delete();
-    await db.chatSessions.bulkPut(records);
+  const res = await fetch(withBasePath(`/api/stages/${encodeURIComponent(stageId)}/chats`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessions: records }),
   });
+  if (!res.ok) console.warn('[ChatStorage] Failed to persist chats:', res.status);
 }
 
-/**
- * Load chat sessions for a stage from IndexedDB.
- * Returns sessions sorted by createdAt.
- */
 export async function loadChatSessions(stageId: string): Promise<ChatSession[]> {
-  const records = await db.chatSessions.where('stageId').equals(stageId).sortBy('createdAt');
+  try {
+    const res = await fetch(
+      withBasePath(`/api/stages/${encodeURIComponent(stageId)}/chats`),
+    );
+    if (!res.ok) return [];
+    const json = await res.json();
+    const sessions = json.sessions || [];
 
-  return records.map((record) => ({
-    id: record.id,
-    type: record.type,
-    title: record.title,
-    status: record.status,
-    messages: record.messages as UIMessage<ChatMessageMetadata>[],
-    config: record.config,
-    toolCalls: record.toolCalls,
-    pendingToolCalls: record.pendingToolCalls,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-    sceneId: record.sceneId,
-    lastActionIndex: record.lastActionIndex,
-  }));
+    return sessions.map((record: Record<string, unknown>) => ({
+      id: record.id as string,
+      type: record.type as string,
+      title: record.title as string,
+      status: record.status as string,
+      messages: (record.messages || []) as UIMessage<ChatMessageMetadata>[],
+      config: record.config as ChatSession['config'],
+      toolCalls: (record.toolCalls || []) as ChatSession['toolCalls'],
+      pendingToolCalls: [],
+      createdAt: record.createdAt as number,
+      updatedAt: record.updatedAt as number,
+      sceneId: record.sceneId as string | undefined,
+      lastActionIndex: record.lastActionIndex as number | undefined,
+    }));
+  } catch {
+    return [];
+  }
 }
 
-/**
- * Delete all chat sessions for a stage.
- */
 export async function deleteChatSessions(stageId: string): Promise<void> {
-  await db.chatSessions.where('stageId').equals(stageId).delete();
+  await fetch(withBasePath(`/api/stages/${encodeURIComponent(stageId)}/chats`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessions: [] }),
+  }).catch(() => {});
 }

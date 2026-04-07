@@ -197,16 +197,16 @@ const useStageStoreBase = create<StageState>()((set, get) => ({
 
   setOutlines: (outlines) => {
     set({ outlines });
-    // Persist outlines to IndexedDB
     const stageId = get().stage?.id;
     if (stageId) {
-      import('@/lib/utils/database').then(({ db }) => {
-        db.stageOutlines.put({
-          stageId,
-          outlines,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
+      import('@/lib/utils/base-path').then(({ withBasePath }) => {
+        fetch(withBasePath(`/api/stages/${encodeURIComponent(stageId)}/outlines`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ outlines }),
+        })
+          .then((r) => { if (!r.ok) console.warn('[Stage] Failed to persist outlines:', r.status); })
+          .catch(() => {});
       });
     }
   },
@@ -269,21 +269,31 @@ const useStageStoreBase = create<StageState>()((set, get) => ({
 
   loadFromStorage: async (stageId: string) => {
     try {
-      // Skip IndexedDB load if the store already has this stage with scenes
+      // Skip server load if the store already has this stage with scenes
       // (e.g. navigated from generation-preview with fresh in-memory data)
       const currentState = get();
       if (currentState.stage?.id === stageId && currentState.scenes.length > 0) {
-        log.info('Stage already loaded in memory, skipping IndexedDB load:', stageId);
+        log.info('Stage already loaded in memory, skipping server load:', stageId);
         return;
       }
 
       const { loadStageData } = await import('@/lib/utils/stage-storage');
       const data = await loadStageData(stageId);
 
-      // Load outlines for resume-on-refresh
-      const { db } = await import('@/lib/utils/database');
-      const outlinesRecord = await db.stageOutlines.get(stageId);
-      const outlines = outlinesRecord?.outlines || [];
+      // Load outlines from server for resume-on-refresh
+      const { withBasePath } = await import('@/lib/utils/base-path');
+      let outlines: SceneOutline[] = [];
+      try {
+        const outlinesRes = await fetch(
+          withBasePath(`/api/stages/${encodeURIComponent(stageId)}/outlines`),
+        );
+        if (outlinesRes.ok) {
+          const outlinesJson = await outlinesRes.json();
+          outlines = (outlinesJson.outlines || []) as SceneOutline[];
+        }
+      } catch {
+        // outlines loading is best-effort
+      }
 
       if (data) {
         set({
@@ -292,12 +302,12 @@ const useStageStoreBase = create<StageState>()((set, get) => ({
           currentSceneId: data.currentSceneId,
           chats: data.chats,
           outlines,
-          // Compute generatingOutlines from persisted outlines minus completed scenes
           generatingOutlines: outlines.filter((o) => !data.scenes.some((s) => s.order === o.order)),
         });
         log.info('Loaded from storage:', stageId);
       } else {
         log.warn('No data found for stage:', stageId);
+        get().clearStore();
       }
     } catch (error) {
       log.error('Failed to load from storage:', error);
@@ -327,9 +337,9 @@ export const useStageStore = createSelectors(useStageStoreBase);
 // ==================== Debounced Save ====================
 
 /**
- * Debounced version of saveToStorage to prevent excessive writes
- * Waits 500ms after the last change before saving
+ * Debounced save — server-side writes are costlier than IndexedDB,
+ * so we use a longer interval (1.5s) to batch rapid edits.
  */
 const debouncedSave = debounce(() => {
   useStageStore.getState().saveToStorage();
-}, 500);
+}, 1500);

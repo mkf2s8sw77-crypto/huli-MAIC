@@ -1105,7 +1105,6 @@ export const useSettingsStore = create<SettingsState>()(
                 autoImageProvider = serverImageIds[0];
                 const models = IMAGE_PROVIDERS[autoImageProvider]?.models;
                 if (models?.length) autoImageModel = models[0].id;
-                if (!state.imageGenerationEnabled) autoImageEnabled = true;
               }
 
               if (!state.autoConfigApplied) {

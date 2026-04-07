@@ -327,49 +327,64 @@ export function agentsToParticipants(
 }
 
 /**
- * Load generated agents for a stage from IndexedDB into the registry.
+ * Load generated agents for a stage from server into the registry.
  * Clears any previously loaded generated agents first.
  * Returns the loaded agent IDs.
  */
 export async function loadGeneratedAgentsForStage(stageId: string): Promise<string[]> {
-  const { getGeneratedAgentsByStageId } = await import('@/lib/utils/database');
-  const records = await getGeneratedAgentsByStageId(stageId);
+  const { withBasePath } = await import('@/lib/utils/base-path');
 
-  const registry = useAgentRegistry.getState();
-
-  // Always clear previously loaded generated agents — even when the new stage
-  // has none — to prevent stale agents from a prior auto-classroom leaking
-  // into the current preset classroom.
-  const currentAgents = registry.listAgents();
-  for (const agent of currentAgents) {
-    if (agent.isGenerated) {
-      registry.deleteAgent(agent.id);
+  try {
+    const registry = useAgentRegistry.getState();
+    const res = await fetch(
+      withBasePath(`/api/stages/${encodeURIComponent(stageId)}/agents`),
+    );
+    if (!res.ok) {
+      throw new Error(`Failed to load generated agents: HTTP ${res.status}`);
     }
+    const json = await res.json();
+    const records = json.agents || [];
+
+    const currentAgents = registry.listAgents();
+    for (const agent of currentAgents) {
+      if (agent.isGenerated) {
+        registry.deleteAgent(agent.id);
+      }
+    }
+
+    if (records.length === 0) return [];
+
+    const ids: string[] = [];
+    for (const record of records) {
+      registry.addAgent({
+        ...record,
+        avatar: normalizeAgentAvatar(record.avatar, { role: record.role }),
+        allowedActions: getActionsForRole(record.role),
+        isDefault: false,
+        isGenerated: true,
+        boundStageId: record.stageId || stageId,
+        createdAt: new Date(record.createdAt),
+        updatedAt: new Date(record.createdAt),
+        ...(record.voiceConfig
+          ? {
+              voiceConfig: {
+                providerId: record.voiceConfig.providerId as TTSProviderId,
+                voiceId: record.voiceConfig.voiceId,
+              },
+            }
+          : {}),
+      });
+      ids.push(record.id);
+    }
+
+    return ids;
+  } catch (error) {
+    throw error instanceof Error ? error : new Error(String(error));
   }
-
-  if (records.length === 0) return [];
-
-  // Add new ones
-  const ids: string[] = [];
-  for (const record of records) {
-    registry.addAgent({
-      ...record,
-      avatar: normalizeAgentAvatar(record.avatar, { role: record.role }),
-      allowedActions: getActionsForRole(record.role),
-      isDefault: false,
-      isGenerated: true,
-      boundStageId: record.stageId,
-      createdAt: new Date(record.createdAt),
-      updatedAt: new Date(record.createdAt),
-    });
-    ids.push(record.id);
-  }
-
-  return ids;
 }
 
 /**
- * Save generated agents to IndexedDB and registry.
+ * Save generated agents to server and registry.
  * Clears old generated agents for this stage first.
  */
 export async function saveGeneratedAgents(
@@ -385,25 +400,29 @@ export async function saveGeneratedAgents(
     voiceConfig?: { providerId: string; voiceId: string };
   }>,
 ): Promise<string[]> {
-  const { db } = await import('@/lib/utils/database');
+  const { withBasePath } = await import('@/lib/utils/base-path');
 
-  // Clear old generated agents for this stage
-  await db.generatedAgents.where('stageId').equals(stageId).delete();
+  const records = agents.map((a) => ({
+    ...a,
+    avatar: normalizeAgentAvatar(a.avatar, { role: a.role }),
+  }));
 
-  // Clear from registry
+  const res = await fetch(
+    withBasePath(`/api/stages/${encodeURIComponent(stageId)}/agents`),
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agents: records }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to persist generated agents: HTTP ${res.status}`);
+  }
+
   const registry = useAgentRegistry.getState();
   for (const agent of registry.listAgents()) {
     if (agent.isGenerated) registry.deleteAgent(agent.id);
   }
-
-  // Write to IndexedDB
-  const records = agents.map((a) => ({
-    ...a,
-    avatar: normalizeAgentAvatar(a.avatar, { role: a.role }),
-    stageId,
-    createdAt: Date.now(),
-  }));
-  await db.generatedAgents.bulkPut(records);
 
   // Add to registry
   for (const record of records) {
@@ -414,8 +433,8 @@ export async function saveGeneratedAgents(
       isDefault: false,
       isGenerated: true,
       boundStageId: stageId,
-      createdAt: new Date(record.createdAt),
-      updatedAt: new Date(record.createdAt),
+      createdAt: new Date(),
+      updatedAt: new Date(),
       ...(voiceConfig
         ? {
             voiceConfig: {

@@ -35,7 +35,7 @@ import type { UserRequirements } from '@/lib/types/generation';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useUserProfileStore, AVATAR_OPTIONS } from '@/lib/store/user-profile';
 import {
-  StageListItem,
+  type StageListItem,
   listStages,
   deleteStageData,
   renameStage,
@@ -51,6 +51,8 @@ import { SpeechButton } from '@/components/audio/speech-button';
 import { ServerProvidersInit } from '@/components/server-providers-init';
 import { withBasePath } from '@/lib/utils/base-path';
 import { LICENSE_URL, SOURCE_CODE_URL } from '@/lib/constants/open-source';
+import { UserMenu } from '@/components/auth/user-menu';
+import { HIDE_SETTINGS_UI } from '@/lib/config/frontend-controls';
 import {
   DEFAULT_VIEWPORT_PRESET,
   VIEWPORT_OPTIONS,
@@ -166,9 +168,11 @@ function HomePage() {
     try {
       const list = await listStages();
       setClassrooms(list);
-      // Load first slide thumbnails
       if (list.length > 0) {
-        const slides = await getFirstSlideByStages(list.map((c) => c.id));
+        const slides = await getFirstSlideByStages(
+          list.map((c) => c.id),
+          list,
+        );
         setThumbnails(slides);
       }
     } catch (err) {
@@ -425,26 +429,34 @@ function HomePage() {
 
         <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />
 
-        {/* Settings Button */}
-        <div className="relative">
-          <button
-            onClick={() => setSettingsOpen(true)}
-            className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
-          >
-            <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" />
-          </button>
-          {needsSetup && (
-            <>
-              <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-                <span className="animate-setup-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-violet-500" />
-              </span>
-              <span className="animate-setup-float absolute top-full mt-2 right-0 whitespace-nowrap text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/50 px-2 py-0.5 rounded-full shadow-sm pointer-events-none hidden sm:inline-flex">
-                {t('settings.setupNeeded')}
-              </span>
-            </>
-          )}
-        </div>
+        <UserMenu />
+
+        {!HIDE_SETTINGS_UI && (
+          <>
+            <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />
+
+            {/* Settings Button */}
+            <div className="relative">
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
+              >
+                <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" />
+              </button>
+              {needsSetup && (
+                <>
+                  <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+                    <span className="animate-setup-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-violet-500" />
+                  </span>
+                  <span className="animate-setup-float absolute top-full mt-2 right-0 whitespace-nowrap text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/50 px-2 py-0.5 rounded-full shadow-sm pointer-events-none hidden sm:inline-flex">
+                    {t('settings.setupNeeded')}
+                  </span>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
       <SettingsDialog
         open={settingsOpen}

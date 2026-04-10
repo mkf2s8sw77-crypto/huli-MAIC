@@ -11,6 +11,8 @@
   },
   "toolbar": {
     "languageHint": "课程将以此语言生成",
+    "viewportPreset": "比例",
+    "viewportPresetHint": "选择课堂画布比例",
     "pdfParser": "解析器",
     "pdfUpload": "上传 PDF",
     "removePdf": "移除文件",
@@ -28,6 +30,12 @@
     "ttsHint": "选择 AI 教师的朗读音色",
     "ttsPreview": "试听",
     "ttsPreviewing": "播放中..."
+  },
+  "viewport": {
+    "16:9": "横版 16:9",
+    "4:3": "横版 4:3",
+    "3:4": "竖版 3:4",
+    "9:16": "竖版 9:16"
   },
   "export": {
     "pptx": "导出 PPTX",
@@ -269,7 +277,7 @@
   "upload": {
     "pdfSizeLimit": "支持最大50MB的PDF文件",
     "generateFailed": "生成课堂失败，请重试",
-    "requirementPlaceholder": "输入你想学的任何内容，例如：\n「从零学 Python，30 分钟写出第一个程序」\n「用白板给我讲解傅里叶变换」\n「阿瓦隆桌游怎么玩」",
+    "requirementPlaceholder": "输入你想学的任何护理相关内容，例如：\n「压疮分期与护理要点」\n「术后疼痛评估与干预」\n「糖尿病足患者出院宣教」",
     "requirementRequired": "请输入课程需求",
     "fileTooLarge": "文件过大，请选择小于50MB的PDF文件"
   },

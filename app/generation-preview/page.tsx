@@ -594,6 +594,10 @@ function GenerationPreviewContent() {
       // Store stage and outlines
       const store = useStageStore.getState();
       store.setStage(stage);
+      // Persist the stage first so /api/stages/:id/outlines owner checks can pass.
+      // Otherwise setOutlines() may race ahead and hit a transient 403 before the
+      // stage row exists on the server.
+      await store.saveToStorage();
       store.setOutlines(outlines);
 
       // Advance to slide-content step

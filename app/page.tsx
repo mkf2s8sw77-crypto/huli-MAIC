@@ -541,8 +541,8 @@ function HomePage() {
               rows={4}
             />
 
-            {/* Toolbar row — stacks vertically on mobile, row on sm+ */}
-            <div className="px-3 pb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+            {/* Toolbar row — keep a single row on mobile as well */}
+            <div className="px-3 pb-3 flex items-center gap-2">
               <div className="flex-1 min-w-0">
                 <GenerationToolbar
                   language={form.language}
@@ -561,7 +561,7 @@ function HomePage() {
                 />
               </div>
 
-              {/* Actions row: voice + send — right-aligned on mobile, inline on sm+ */}
+              {/* Actions row */}
               <div className="flex items-center gap-2 justify-end shrink-0">
                 {/* Voice input */}
                 <SpeechButton
@@ -580,13 +580,13 @@ function HomePage() {
                   onClick={handleGenerate}
                   disabled={!canGenerate}
                   className={cn(
-                    'shrink-0 h-9 sm:h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-4 sm:px-3',
+                    'shrink-0 h-9 sm:h-8 rounded-lg flex items-center justify-center gap-1 sm:gap-1.5 transition-all px-2.5 sm:px-3 min-w-[96px] sm:min-w-0',
                     canGenerate
                       ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm cursor-pointer'
                       : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
                   )}
                 >
-                  <span className="text-xs font-medium">{t('toolbar.enterClassroom')}</span>
+                  <span className="text-[11px] sm:text-xs font-medium">{t('toolbar.enterClassroom')}</span>
                   <ArrowUp className="size-3.5" />
                 </button>
               </div>

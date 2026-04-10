@@ -18,7 +18,7 @@ export function UserMenu() {
   if (!session?.user) {
     return (
       <Link
-        href={withBasePath('/login')}
+        href="/login"
         className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all"
         title="登录"
       >

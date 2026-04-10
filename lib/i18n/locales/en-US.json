@@ -11,6 +11,8 @@
   },
   "toolbar": {
     "languageHint": "Course will be generated in this language",
+    "viewportPreset": "Aspect",
+    "viewportPresetHint": "Choose the classroom canvas ratio",
     "pdfParser": "Parser",
     "pdfUpload": "Upload PDF",
     "removePdf": "Remove file",
@@ -28,6 +30,12 @@
     "ttsHint": "Choose a voice for the AI teacher",
     "ttsPreview": "Preview",
     "ttsPreviewing": "Playing..."
+  },
+  "viewport": {
+    "16:9": "Landscape 16:9",
+    "4:3": "Landscape 4:3",
+    "3:4": "Portrait 3:4",
+    "9:16": "Portrait 9:16"
   },
   "export": {
     "pptx": "Export PPTX",
@@ -269,7 +277,7 @@
   "upload": {
     "pdfSizeLimit": "Supports PDF files up to 50MB",
     "generateFailed": "Failed to generate classroom, please try again",
-    "requirementPlaceholder": "Tell me anything you want to learn, e.g.\n\"Teach me Python from scratch in 30 minutes\"\n\"Explain Fourier Transform on the whiteboard\"\n\"How to play the board game Avalon\"",
+    "requirementPlaceholder": "Tell me what nursing topic you want to learn, e.g.\n\"Pressure injury staging and nursing care\"\n\"Postoperative pain assessment and intervention\"\n\"Discharge education for diabetic foot patients\"",
     "requirementRequired": "Please enter course requirements",
     "fileTooLarge": "File too large. Please select a PDF file smaller than 50MB"
   },

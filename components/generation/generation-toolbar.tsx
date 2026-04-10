@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useMemo } from 'react';
-import { Bot, Check, ChevronLeft, Globe, Paperclip, FileText, X, Globe2 } from 'lucide-react';
+import { Bot, Check, ChevronLeft, Paperclip, FileText, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
@@ -16,8 +16,6 @@ import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { PDF_PROVIDERS } from '@/lib/pdf/constants';
 import type { PDFProviderId } from '@/lib/pdf/types';
-import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
-import type { WebSearchProviderId } from '@/lib/web-search/types';
 import type { ProviderId } from '@/lib/ai/providers';
 import type { SettingsSection } from '@/lib/types/settings';
 import { MediaPopover } from '@/components/generation/media-popover';
@@ -46,12 +44,12 @@ export interface GenerationToolbarProps {
 
 // ─── Component ───────────────────────────────────────────────
 export function GenerationToolbar({
-  language,
-  onLanguageChange,
+  language: _language,
+  onLanguageChange: _onLanguageChange,
   viewportPreset,
   onViewportPresetChange,
-  webSearch,
-  onWebSearchChange,
+  webSearch: _webSearch,
+  onWebSearchChange: _onWebSearchChange,
   onSettingsOpen,
   pdfFile,
   onPdfFileChange,
@@ -65,20 +63,8 @@ export function GenerationToolbar({
   const pdfProviderId = useSettingsStore((s) => s.pdfProviderId);
   const pdfProvidersConfig = useSettingsStore((s) => s.pdfProvidersConfig);
   const setPDFProvider = useSettingsStore((s) => s.setPDFProvider);
-  const webSearchProviderId = useSettingsStore((s) => s.webSearchProviderId);
-  const webSearchProvidersConfig = useSettingsStore((s) => s.webSearchProvidersConfig);
-  const setWebSearchProvider = useSettingsStore((s) => s.setWebSearchProvider);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-
-  // Check if the selected web search provider has a valid config (API key or server-configured)
-  const webSearchProvider = WEB_SEARCH_PROVIDERS[webSearchProviderId];
-  const webSearchConfig = webSearchProvidersConfig[webSearchProviderId];
-  const webSearchAvailable = webSearchProvider
-    ? !webSearchProvider.requiresApiKey ||
-      !!webSearchConfig?.apiKey ||
-      !!webSearchConfig?.isServerConfigured
-    : false;
 
   // Configured LLM providers (only those with valid credentials + models + endpoint)
   const configuredProviders = providersConfig
@@ -102,6 +88,9 @@ export function GenerationToolbar({
     : [];
 
   const currentProviderConfig = providersConfig?.[currentProviderId];
+  const selectedViewportOption =
+    VIEWPORT_OPTIONS.find((option) => option.id === viewportPreset) ?? VIEWPORT_OPTIONS[0];
+  const [viewportSelectOpen, setViewportSelectOpen] = useState(false);
 
   // PDF handler
   const handleFileSelect = (file: File) => {
@@ -121,7 +110,7 @@ export function GenerationToolbar({
   const pillActive = `${pillCls} border-violet-200/60 dark:border-violet-700/50 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300`;
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div className="flex items-center gap-1 shrink-0 min-w-0">
       {!HIDE_SETTINGS_UI && (
         <>
           {/* ── Model selector ── */}
@@ -286,132 +275,43 @@ export function GenerationToolbar({
         </PopoverContent>
       </Popover>
 
-      {/* ── Web Search ── */}
-      {webSearchAvailable ? (
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className={webSearch ? pillActive : pillMuted}>
-              <Globe2 className={cn('size-3.5', webSearch && 'animate-pulse')} />
-              {webSearch && (
-                <span>{WEB_SEARCH_PROVIDERS[webSearchProviderId]?.name || 'Search'}</span>
-              )}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-3 space-y-3">
-            {/* Toggle */}
-            <button
-              onClick={() => onWebSearchChange(!webSearch)}
-              className={cn(
-                'w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all',
-                webSearch
-                  ? 'bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800'
-                  : 'border-border hover:bg-muted/50',
-              )}
-            >
-              <Globe2
-                className={cn(
-                  'size-4 shrink-0',
-                  webSearch ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground',
-                )}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium">
-                  {webSearch ? t('toolbar.webSearchOn') : t('toolbar.webSearchOff')}
-                </p>
-                <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                  {t('toolbar.webSearchDesc')}
-                </p>
-              </div>
-            </button>
-
-            {/* Provider selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground shrink-0">
-                {t('toolbar.webSearchProvider')}
-              </span>
-              <Select
-                value={webSearchProviderId}
-                onValueChange={(v) => setWebSearchProvider(v as WebSearchProviderId)}
-              >
-                <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.values(WEB_SEARCH_PROVIDERS).map((provider) => {
-                    const cfg = webSearchProvidersConfig[provider.id];
-                    const available =
-                      !provider.requiresApiKey || !!cfg?.apiKey || !!cfg?.isServerConfigured;
-                    return (
-                      <SelectItem key={provider.id} value={provider.id} disabled={!available}>
-                        <div
-                          className={cn('flex items-center gap-1.5', !available && 'opacity-50')}
-                        >
-                          {provider.name}
-                          {cfg?.isServerConfigured && (
-                            <span className="text-[9px] px-1 py-0 rounded border text-muted-foreground">
-                              {t('settings.serverConfigured')}
-                            </span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          </PopoverContent>
-        </Popover>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button className={cn(pillCls, 'text-muted-foreground/40 cursor-not-allowed')} disabled>
-              <Globe2 className="size-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>{t('toolbar.webSearchNoProvider')}</TooltipContent>
-        </Tooltip>
-      )}
-
-      {/* ── Language pill ── */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={() => onLanguageChange(language === 'zh-CN' ? 'en-US' : 'zh-CN')}
-            className={pillMuted}
-          >
-            <Globe className="size-3.5" />
-            <span>{language === 'zh-CN' ? '中文' : 'EN'}</span>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{t('toolbar.languageHint')}</TooltipContent>
-      </Tooltip>
-
       {/* ── Viewport preset ── */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div>
-            <Select
-              value={viewportPreset}
-              onValueChange={(value) => onViewportPresetChange(value as ViewportPreset)}
-            >
-              <SelectTrigger className="h-9 sm:h-7 rounded-full border-border/50 bg-transparent px-2.5 text-xs shadow-none min-w-[84px]">
-                <span className="flex items-center gap-1.5 truncate">
-                  <span className="text-muted-foreground/70">{t('toolbar.viewportPreset')}</span>
-                  <SelectValue />
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {VIEWPORT_OPTIONS.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {t(`viewport.${option.id}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>{t('toolbar.viewportPresetHint')}</TooltipContent>
-      </Tooltip>
+      <Select
+        value={viewportPreset}
+        open={viewportSelectOpen}
+        onOpenChange={(open) => {
+          setViewportSelectOpen(open);
+          if (open) {
+            window.requestAnimationFrame(() => {
+              if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+              }
+            });
+          }
+        }}
+        onValueChange={(value) => onViewportPresetChange(value as ViewportPreset)}
+      >
+        <SelectTrigger
+          aria-label={t('toolbar.viewportPresetHint')}
+          className="h-9 sm:h-7 rounded-full border-border/50 bg-transparent px-2 text-xs shadow-none min-w-[72px] sm:min-w-[128px] justify-center"
+        >
+          <span className="flex w-full items-center justify-center gap-1 pr-1 sm:justify-start sm:pr-0 min-w-0">
+            <span className="hidden sm:inline text-muted-foreground/70 shrink-0">
+              {t('toolbar.viewportPreset')}
+            </span>
+            <span className="truncate text-center sm:text-left">
+              {selectedViewportOption.label}
+            </span>
+          </span>
+        </SelectTrigger>
+        <SelectContent position="popper" side="top" sideOffset={6}>
+          {VIEWPORT_OPTIONS.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {!HIDE_SETTINGS_UI && (
         <>

@@ -18,11 +18,116 @@ import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generatio
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
-import type { ViewportPreset } from '@/lib/config/viewport';
+import {
+  DEFAULT_VIEWPORT_SIZE,
+  getViewportRatio,
+  type ViewportPreset,
+} from '@/lib/config/viewport';
+import type { GeneratedSlideContent } from '@/lib/types/generation';
 
 const log = createLogger('Scene Content API');
 
 export const maxDuration = 300;
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function buildLocalFallbackSlideContent(
+  outline: SceneOutline,
+  stageInfo?: {
+    viewportPreset?: ViewportPreset;
+    viewportSize?: number;
+    viewportRatio?: number;
+  },
+): GeneratedSlideContent {
+  const viewportPreset = stageInfo?.viewportPreset || '16:9';
+  const viewportSize = stageInfo?.viewportSize || DEFAULT_VIEWPORT_SIZE;
+  const viewportRatio =
+    stageInfo?.viewportRatio !== undefined
+      ? stageInfo.viewportRatio
+      : getViewportRatio(viewportPreset);
+  const canvasWidth = viewportSize;
+  const isPortrait = viewportRatio > 1;
+  const titleBarHeight = isPortrait ? 128 : 96;
+  const bodyTop = titleBarHeight + 54;
+  const bodyWidth = canvasWidth - 120;
+  const description = outline.description?.trim();
+  const points = (outline.keyPoints || []).slice(0, isPortrait ? 4 : 5);
+  const bulletText = points.map((point) => `• ${point}`).join('</p><p style="font-size: 26px;">');
+
+  return {
+    background: { type: 'solid', color: '#ffffff' },
+    remark: `${outline.description || ''}${outline.description ? ' ' : ''}[fallback-local-slide]`,
+    elements: [
+      {
+        id: 'shape_title',
+        type: 'shape',
+        left: 40,
+        top: 40,
+        width: canvasWidth - 80,
+        height: titleBarHeight,
+        path: 'M 12 0 H 88 Q 100 0 100 12 V 88 Q 100 100 88 100 H 12 Q 0 100 0 88 V 12 Q 0 0 12 0 Z',
+        viewBox: [100, 100],
+        fill: '#1E3A8A',
+        fixedRatio: false,
+      },
+      {
+        id: 'text_title',
+        type: 'text',
+        left: 76,
+        top: 58,
+        width: canvasWidth - 152,
+        height: titleBarHeight - 28,
+        content: `<p style="font-size: ${isPortrait ? 42 : 34}px; color: #ffffff; font-weight: 700; line-height: 1.2;">${escapeHtml(outline.title)}</p>`,
+        defaultFontName: '',
+        defaultColor: '#ffffff',
+      },
+      ...(description
+        ? [
+            {
+              id: 'text_desc',
+              type: 'text' as const,
+              left: 60,
+              top: bodyTop,
+              width: bodyWidth,
+              height: isPortrait ? 92 : 72,
+              content: `<p style="font-size: ${isPortrait ? 28 : 24}px; color: #334155; line-height: 1.35;">${escapeHtml(description)}</p>`,
+              defaultFontName: '',
+              defaultColor: '#334155',
+            },
+          ]
+        : []),
+      {
+        id: 'shape_points',
+        type: 'shape',
+        left: 60,
+        top: description ? bodyTop + (isPortrait ? 116 : 86) : bodyTop,
+        width: bodyWidth,
+        height: isPortrait ? 320 : 220,
+        path: 'M 10 0 H 90 Q 100 0 100 10 V 90 Q 100 100 90 100 H 10 Q 0 100 0 90 V 10 Q 0 0 10 0 Z',
+        viewBox: [100, 100],
+        fill: '#F5F9FF',
+        fixedRatio: false,
+      },
+      {
+        id: 'text_points',
+        type: 'text',
+        left: 84,
+        top: description ? bodyTop + (isPortrait ? 136 : 106) : bodyTop + 20,
+        width: bodyWidth - 48,
+        height: isPortrait ? 280 : 180,
+        content: `<p style="font-size: ${isPortrait ? 28 : 26}px; color: #1E3A8A; font-weight: 700;">关键要点</p><p style="font-size: ${isPortrait ? 26 : 24}px; color: #475569; line-height: 1.35; margin-top: 10px;">${bulletText || '• 本页内容由本地兜底生成，请稍后重试以获取完整排版结果'}</p>`,
+        defaultFontName: '',
+        defaultColor: '#475569',
+      },
+    ],
+  };
+}
 
 export async function POST(req: NextRequest) {
   let outlineTitle: string | undefined;
@@ -144,30 +249,55 @@ export async function POST(req: NextRequest) {
       `Generating content: "${effectiveOutline.title}" (${effectiveOutline.type}) [model=${modelString}]`,
     );
 
-    const content = await generateSceneContent(
-      effectiveOutline,
-      aiCall,
-      assignedImages,
-      imageMapping,
-      effectiveOutline.type === 'pbl' ? languageModel : undefined,
-      hasVision,
-      generatedMediaMapping,
-      agents,
-      {
-        viewportPreset: stageInfo?.viewportPreset,
-        viewportSize: stageInfo?.viewportSize,
-        viewportRatio: stageInfo?.viewportRatio,
-      },
-    );
+    let content: ReturnType<typeof buildLocalFallbackSlideContent> | Awaited<ReturnType<typeof generateSceneContent>> | null = null;
+    try {
+      content = await generateSceneContent(
+        effectiveOutline,
+        aiCall,
+        assignedImages,
+        imageMapping,
+        effectiveOutline.type === 'pbl' ? languageModel : undefined,
+        hasVision,
+        generatedMediaMapping,
+        agents,
+        {
+          viewportPreset: stageInfo?.viewportPreset,
+          viewportSize: stageInfo?.viewportSize,
+          viewportRatio: stageInfo?.viewportRatio,
+        },
+      );
+    } catch (error) {
+      if (effectiveOutline.type === 'slide') {
+        log.warn(
+          `Scene content model call failed for "${effectiveOutline.title}", using local fallback slide:`,
+          error,
+        );
+        content = buildLocalFallbackSlideContent(effectiveOutline, {
+          viewportPreset: stageInfo?.viewportPreset,
+          viewportSize: stageInfo?.viewportSize,
+          viewportRatio: stageInfo?.viewportRatio,
+        });
+      } else {
+        throw error;
+      }
+    }
 
     if (!content) {
-      log.error(`Failed to generate content for: "${effectiveOutline.title}"`);
-
-      return apiError(
-        'GENERATION_FAILED',
-        500,
-        `Failed to generate content: ${effectiveOutline.title}`,
-      );
+      if (effectiveOutline.type === 'slide') {
+        log.warn(`Using local fallback slide content for: "${effectiveOutline.title}"`);
+        content = buildLocalFallbackSlideContent(effectiveOutline, {
+          viewportPreset: stageInfo?.viewportPreset,
+          viewportSize: stageInfo?.viewportSize,
+          viewportRatio: stageInfo?.viewportRatio,
+        });
+      } else {
+        log.error(`Failed to generate content for: "${effectiveOutline.title}"`);
+        return apiError(
+          'GENERATION_FAILED',
+          500,
+          `Failed to generate content: ${effectiveOutline.title}`,
+        );
+      }
     }
 
     log.info(`Content generated successfully: "${effectiveOutline.title}"`);

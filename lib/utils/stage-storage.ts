@@ -222,7 +222,32 @@ export async function getFirstSlideByStages(
  */
 export async function renameStage(stageId: string, newName: string): Promise<void> {
   try {
-    await db.stages.update(stageId, { name: newName, updatedAt: Date.now() });
+    const getRes = await fetch(withBasePath(`/api/stages/${encodeURIComponent(stageId)}`), {
+      method: 'GET',
+    });
+    if (!getRes.ok) {
+      const err = await getRes.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${getRes.status}`);
+    }
+
+    const data = (await getRes.json()) as { success?: boolean; stage?: Stage };
+    const stage = data.stage;
+    if (!stage) {
+      throw new Error('Stage not found');
+    }
+
+    const putRes = await fetch(withBasePath(`/api/stages/${encodeURIComponent(stageId)}`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stage: { ...stage, name: newName, updatedAt: Date.now() },
+      }),
+    });
+
+    if (!putRes.ok) {
+      const err = await putRes.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${putRes.status}`);
+    }
     log.info(`Renamed stage ${stageId} to "${newName}"`);
   } catch (error) {
     log.error('Failed to rename stage:', error);

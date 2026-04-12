@@ -67,6 +67,7 @@ function buildLocalFallbackSlideContent(
       {
         id: 'shape_title',
         type: 'shape',
+        rotate: 0,
         left: 40,
         top: 40,
         width: canvasWidth - 80,
@@ -79,6 +80,7 @@ function buildLocalFallbackSlideContent(
       {
         id: 'text_title',
         type: 'text',
+        rotate: 0,
         left: 76,
         top: 58,
         width: canvasWidth - 152,
@@ -92,6 +94,7 @@ function buildLocalFallbackSlideContent(
             {
               id: 'text_desc',
               type: 'text' as const,
+              rotate: 0,
               left: 60,
               top: bodyTop,
               width: bodyWidth,
@@ -105,6 +108,7 @@ function buildLocalFallbackSlideContent(
       {
         id: 'shape_points',
         type: 'shape',
+        rotate: 0,
         left: 60,
         top: description ? bodyTop + (isPortrait ? 116 : 86) : bodyTop,
         width: bodyWidth,
@@ -117,6 +121,7 @@ function buildLocalFallbackSlideContent(
       {
         id: 'text_points',
         type: 'text',
+        rotate: 0,
         left: 84,
         top: description ? bodyTop + (isPortrait ? 136 : 106) : bodyTop + 20,
         width: bodyWidth - 48,

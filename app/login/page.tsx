@@ -2,18 +2,38 @@
 
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { withBasePath } from '@/lib/utils/base-path';
+import { getAppHomeHref, navigateToAppHome } from '@/lib/utils/navigation';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const resolveCallbackUrl = (): string => {
+    if (typeof window === 'undefined') {
+      return getAppHomeHref();
+    }
+
+    const raw = new URLSearchParams(window.location.search).get('callbackUrl');
+    if (!raw) {
+      return getAppHomeHref();
+    }
+
+    try {
+      const target = new URL(raw, window.location.origin);
+      if (target.origin !== window.location.origin) {
+        return getAppHomeHref();
+      }
+      return `${target.pathname}${target.search}${target.hash}` || getAppHomeHref();
+    } catch {
+      return getAppHomeHref();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,8 +50,12 @@ export default function LoginPage() {
       if (result?.error) {
         setError('邮箱或密码错误');
       } else {
-        router.push('/');
-        router.refresh();
+        const callbackUrl = resolveCallbackUrl();
+        if (callbackUrl === getAppHomeHref()) {
+          navigateToAppHome();
+        } else {
+          window.location.assign(callbackUrl);
+        }
       }
     } catch {
       setError('登录失败，请稍后重试');

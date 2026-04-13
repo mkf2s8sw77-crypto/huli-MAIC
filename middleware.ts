@@ -11,16 +11,41 @@
  *   - 未登录用户访问受保护 API 时返回 401
  */
 
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import NextAuth from 'next-auth';
 import { authConfig } from '@/lib/server/auth.config';
+import { stripBasePath } from '@/lib/utils/base-path';
 
 const { auth } = NextAuth(authConfig);
 
+const PUBLIC_FILE_RE = /\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|eot)$/i;
+
+function isPublicAsset(pathname: string): boolean {
+  const normalized = stripBasePath(pathname);
+
+  return (
+    normalized.startsWith('/_next/static') ||
+    normalized.startsWith('/_next/image') ||
+    normalized === '/favicon.ico' ||
+    normalized === '/robots.txt' ||
+    normalized === '/sitemap.xml' ||
+    normalized === '/huli-tech-logo.png' ||
+    normalized.startsWith('/avatars/') ||
+    normalized.startsWith('/logos/') ||
+    PUBLIC_FILE_RE.test(normalized)
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Auth.js middleware type mismatch with Next.js 16
-export default auth as any;
+export default function middleware(request: NextRequest) {
+  if (isPublicAsset(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
+  return (auth as any)(request);
+}
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|avatars/|huli-tech-logo\\.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|eot)$).*)',
-  ],
+  matcher: ['/:path*'],
 };

@@ -8,6 +8,28 @@
  */
 
 import type { NextAuthConfig } from 'next-auth';
+import { withBasePath, stripBasePath } from '@/lib/utils/base-path';
+
+function getPublicOrigin(nextUrl: URL): string {
+  const configured =
+    process.env.APP_PUBLIC_ORIGIN?.trim() ||
+    process.env.AUTH_URL?.trim() ||
+    process.env.NEXTAUTH_URL?.trim();
+
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      // ignore invalid env and fall back to request origin
+    }
+  }
+
+  return nextUrl.origin;
+}
+
+function buildAppUrl(nextUrl: URL, path: string): URL {
+  return new URL(withBasePath(path), getPublicOrigin(nextUrl));
+}
 
 export const authConfig: NextAuthConfig = {
   providers: [], // 在 auth.ts 中填充
@@ -16,7 +38,7 @@ export const authConfig: NextAuthConfig = {
     maxAge: 30 * 24 * 60 * 60,
   },
   pages: {
-    signIn: '/login',
+    signIn: withBasePath('/login'),
   },
   callbacks: {
     async jwt({ token, user }) {
@@ -33,10 +55,15 @@ export const authConfig: NextAuthConfig = {
     },
     authorized({ auth: session, request: { nextUrl } }) {
       const isLoggedIn = !!session?.user;
-      const { pathname } = nextUrl;
+      const pathname = stripBasePath(nextUrl.pathname);
 
       const publicPaths = ['/login', '/register', '/open-source'];
-      const publicApiPrefixes = ['/api/auth', '/api/health', '/api/server-providers'];
+      const publicApiPrefixes = [
+        '/api/auth',
+        '/api/health',
+        '/api/server-providers',
+        '/api/public-assets',
+      ];
 
       const isPublicPage = publicPaths.some(
         (p) => pathname === p || pathname.startsWith(p + '/'),
@@ -47,7 +74,7 @@ export const authConfig: NextAuthConfig = {
 
       if (isPublicPage || isPublicApi) {
         if (isLoggedIn && (pathname === '/login' || pathname === '/register')) {
-          return Response.redirect(new URL('/', nextUrl));
+          return Response.redirect(buildAppUrl(nextUrl, '/'));
         }
         return true;
       }
@@ -56,7 +83,13 @@ export const authConfig: NextAuthConfig = {
         if (pathname.startsWith('/api/')) {
           return Response.json({ error: '未登录' }, { status: 401 });
         }
-        return false;
+        const loginUrl = buildAppUrl(nextUrl, '/login');
+        const callbackPath = `${pathname || '/'}${nextUrl.search}`;
+        loginUrl.searchParams.set(
+          'callbackUrl',
+          `${getPublicOrigin(nextUrl)}${withBasePath(callbackPath)}`,
+        );
+        return Response.redirect(loginUrl);
       }
 
       return true;

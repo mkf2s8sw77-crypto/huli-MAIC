@@ -1177,6 +1177,22 @@ export const useSettingsStore = create<SettingsState>()(
                 }
               }
 
+              // If a usable provider is already selected but modelId is empty,
+              // auto-fill the first server-allowed model (or first built-in model).
+              if (!state.modelId) {
+                const providerForModel = (autoProviderId ||
+                  validLLMProvider ||
+                  state.providerId) as ProviderId | '';
+                if (providerForModel) {
+                  const cfg = newProvidersConfig[providerForModel];
+                  const fallbackModel =
+                    cfg?.serverModels?.[0] || PROVIDERS[providerForModel]?.models[0]?.id;
+                  if (fallbackModel) {
+                    autoModelId = autoModelId || fallbackModel;
+                  }
+                }
+              }
+
               return {
                 providersConfig: newProvidersConfig,
                 ttsProvidersConfig: newTTSConfig,

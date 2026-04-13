@@ -25,7 +25,7 @@ import { Volume2, Mic, MicOff, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide
 import { cn } from '@/lib/utils';
 import azureVoicesData from '@/lib/audio/azure.json';
 import { createLogger } from '@/lib/logger';
-import { withBasePath } from '@/lib/utils/base-path';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 
 const log = createLogger('AudioSettings');
 
@@ -439,7 +439,7 @@ export function AudioSettings({ onSave }: AudioSettingsProps = {}) {
                     <div className="flex items-center gap-2">
                       {provider.icon && (
                         <img
-                          src={withBasePath(provider.icon)}
+                          src={publicAssetUrl(provider.icon)}
                           alt={provider.name}
                           className="w-4 h-4"
                         />
@@ -571,7 +571,7 @@ export function AudioSettings({ onSave }: AudioSettingsProps = {}) {
                     <div className="flex items-center gap-2">
                       {provider.icon && (
                         <img
-                          src={withBasePath(provider.icon)}
+                          src={publicAssetUrl(provider.icon)}
                           alt={provider.name}
                           className="w-4 h-4"
                         />

@@ -18,6 +18,7 @@ import { useI18n } from '@/lib/hooks/use-i18n';
 import type { SceneType, SlideContent } from '@/lib/types/stage';
 import { PENDING_SCENE_ID } from '@/lib/store/stage';
 import { withBasePath } from '@/lib/utils/base-path';
+import { appLogoUrl } from '@/lib/utils/public-asset';
 import { getAspectRatioCssValueByRatio, getViewportRatio } from '@/lib/config/viewport';
 import { navigateToAppHome } from '@/lib/utils/navigation';
 
@@ -131,7 +132,7 @@ export function SceneSidebar({
               title={t('generation.backToHome')}
             >
               <img
-                src={withBasePath('/huli-tech-logo.png')}
+                src={appLogoUrl()}
                 alt="Huli Tech"
                 className="h-6 w-auto object-contain rounded-none"
               />

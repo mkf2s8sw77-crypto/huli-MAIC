@@ -7,8 +7,8 @@ import { AlertCircle, User, Users, Sparkles, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { withBasePath } from '@/lib/utils/base-path';
 import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 
 interface Agent {
   id: string;
@@ -113,7 +113,7 @@ export function AgentSettings({
                   />
                   <Avatar className="size-10">
                     <AvatarImage
-                      src={withBasePath(normalizeAgentAvatar(agent.avatar, { role: agent.role }))}
+                      src={publicAssetUrl(normalizeAgentAvatar(agent.avatar, { role: agent.role }))}
                       alt={getAgentName(agent)}
                     />
                     <AvatarFallback>{getAgentName(agent).charAt(0)}</AvatarFallback>

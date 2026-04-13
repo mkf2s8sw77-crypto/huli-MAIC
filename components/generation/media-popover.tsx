@@ -37,7 +37,7 @@ import { ASR_PROVIDERS, getASRSupportedLanguages } from '@/lib/audio/constants';
 import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
 import type { TTSProviderId, ASRProviderId } from '@/lib/audio/types';
 import type { SettingsSection } from '@/lib/types/settings';
-import { withBasePath } from '@/lib/utils/base-path';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 import { MEDIA_SETTINGS_LOCKED, VIDEO_SETTINGS_HIDDEN } from '@/lib/config/media-settings';
 
 interface MediaPopoverProps {
@@ -620,7 +620,7 @@ function GroupedSelect({
         <span className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
           {selectedGroup?.groupIcon && (
             <img
-              src={withBasePath(selectedGroup.groupIcon)}
+              src={publicAssetUrl(selectedGroup.groupIcon)}
               alt=""
               className="size-4 rounded-sm shrink-0"
             />
@@ -640,7 +640,7 @@ function GroupedSelect({
               <SelectLabel className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider">
                 {group.groupIcon && (
                   <img
-                    src={withBasePath(group.groupIcon)}
+                    src={publicAssetUrl(group.groupIcon)}
                     alt=""
                     className={cn('size-3.5 rounded-sm', !group.available && 'opacity-40')}
                   />

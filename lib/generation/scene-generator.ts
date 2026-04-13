@@ -1330,7 +1330,13 @@ export async function generateSceneActions(
       return generateDefaultSlideActions(outline, content.elements);
     }
 
-    const response = await aiCall(prompts.system, prompts.user);
+    let response: string;
+    try {
+      response = await aiCall(prompts.system, prompts.user);
+    } catch (error) {
+      log.warn(`Slide actions generation failed for "${outline.title}", falling back to defaults`, error);
+      return generateDefaultSlideActions(outline, content.elements);
+    }
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
@@ -1359,7 +1365,13 @@ export async function generateSceneActions(
       return generateDefaultQuizActions(outline);
     }
 
-    const response = await aiCall(prompts.system, prompts.user);
+    let response: string;
+    try {
+      response = await aiCall(prompts.system, prompts.user);
+    } catch (error) {
+      log.warn(`Quiz actions generation failed for "${outline.title}", falling back to defaults`, error);
+      return generateDefaultQuizActions(outline);
+    }
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
@@ -1387,7 +1399,16 @@ export async function generateSceneActions(
       return generateDefaultInteractiveActions(outline);
     }
 
-    const response = await aiCall(prompts.system, prompts.user);
+    let response: string;
+    try {
+      response = await aiCall(prompts.system, prompts.user);
+    } catch (error) {
+      log.warn(
+        `Interactive actions generation failed for "${outline.title}", falling back to defaults`,
+        error,
+      );
+      return generateDefaultInteractiveActions(outline);
+    }
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {
@@ -1415,7 +1436,13 @@ export async function generateSceneActions(
       return generateDefaultPBLActions(outline);
     }
 
-    const response = await aiCall(prompts.system, prompts.user);
+    let response: string;
+    try {
+      response = await aiCall(prompts.system, prompts.user);
+    } catch (error) {
+      log.warn(`PBL actions generation failed for "${outline.title}", falling back to defaults`, error);
+      return generateDefaultPBLActions(outline);
+    }
     const actions = parseActionsFromStructuredOutput(response, outline.type);
 
     if (actions.length > 0) {

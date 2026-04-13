@@ -148,6 +148,30 @@
 所有"回首页"入口也必须走统一 helper 或 `withBasePath('/')`，不要手写 `/`，
 避免在子路径部署下出现 `/maic/maic` 这类重复拼接。
 
+近期生产回流修复已验证：最容易在 `dev/sys` 之间漂移的不是业务功能本身，而是
+“子路径认证/资源访问”和“默认模型/默认语言决策”。这两类差异必须继续通过
+`NEXT_PUBLIC_BASE_PATH`、`APP_PUBLIC_ORIGIN`、服务端 provider 配置等方式收敛，
+不要再靠环境内手改源码维持。
+
+应用 URL / origin / basePath 的推导已收敛为两层唯一真源：
+- **服务端**：`lib/server/app-url.ts` — `getAppOrigin()` / `getAppBaseUrl()` / `buildAppUrl()`
+  - 认证重定向、callbackUrl 构造、课堂分享 URL 等均走此层
+  - 优先级：`APP_PUBLIC_ORIGIN` > `AUTH_URL` > `NEXTAUTH_URL` > 请求头 > requestUrl
+- **客户端**：`lib/utils/base-path.ts`（`withBasePath` / `stripBasePath`）+ `lib/utils/navigation.ts`（`getAppHomeHref` / `resolveCallbackUrl`）
+- **公共静态资源**：`lib/utils/public-asset.ts`（`publicAssetUrl` / `appLogoUrl` / `avatarAssetUrl` / `logoAssetUrl`）
+
+`withBasePath()` 只负责 basePath 拼接，不做任何资源路由决策。
+公共资源 URL（logo / avatars / provider icons）统一通过 `publicAssetUrl()` 系列 helper 生成，
+不再隐式依赖 `withBasePath` 内部的改写逻辑。新增公共资源类型时在 `public-asset.ts` 中扩展，不要回到在 `withBasePath` 里加特判。
+
+后续新增任何需要推导 origin 或拼接应用内绝对 URL 的逻辑，不要在各自文件重新实现，统一走上述模块。
+
+启动期环境自检（`lib/server/env-check.ts`）通过 `instrumentation.ts` 在服务端启动时执行一次，
+覆盖 `NEXT_PUBLIC_BASE_PATH`、`APP_PUBLIC_ORIGIN`、`AUTH_URL`、`NEXTAUTH_URL` 的格式与一致性校验。
+致命错误（basePath 含协议/非法字符、origin 变量不可解析、origin 路径与 basePath 重复）会 fail-fast 阻止启动；
+可疑配置（尾部斜杠、origin 含非根路径、多 origin 不一致、生产环境缺 origin 或使用 HTTP）仅输出警告。
+校验逻辑不含任何域名硬编码或 host 特判，本地/预发布/生产共用同一套规则。
+
 ### 5.2 媒体能力是服务端统一编排
 
 LLM、Image、TTS、ASR、PDF、Web Search 都属于应用编排的多 provider 能力。  
@@ -273,6 +297,7 @@ agent 头像不是完全可信输入。
 - 公网可达依赖现成 ingress 层
 - 不要为了新增一个 path 服务，再造一套单项目 gateway 结构
 - `dev-huli-gateway-tunnel` 的 PM2 工作目录已迁到 `/Users/huli-dev/.infra/dev-huli-gateway`；旧的 `Documents/_infra` 不再是这条 tunnel 的依赖路径
+- `dev-huli-gateway-tunnel` 当前应显式使用专用私钥 `~/.ssh/dev_huli_gateway`（对应公钥注释 `dev-huli-gateway-tunnel`），不要再依赖会失效的 `SSH_AUTH_SOCK`
 - MAIC 当前对子路径的规范化是 `/maic/ -> /maic`；共享 gateway 上 `location = /maic` 必须直接代理 upstream，不能再强制跳回 `/maic/`
 
 ### 5.6 账号体系与数据持久化（Phase 1-3 已全部落地）

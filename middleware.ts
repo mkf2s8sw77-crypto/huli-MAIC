@@ -37,12 +37,12 @@ function isPublicAsset(pathname: string): boolean {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Auth.js middleware type mismatch with Next.js 16
 export default function middleware(request: NextRequest) {
   if (isPublicAsset(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Auth.js middleware type mismatch with Next.js 16
   return (auth as any)(request);
 }
 

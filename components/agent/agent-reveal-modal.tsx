@@ -5,8 +5,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
-import { withBasePath } from '@/lib/utils/base-path';
 import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 
 interface AgentRevealModalProps {
   agents: Array<{
@@ -234,7 +234,7 @@ export function AgentRevealModal({ agents, open, onClose, onAllRevealed }: Agent
                             >
                               {isUrl(agent.avatar) ? (
                                 <img
-                                  src={withBasePath(
+                                  src={publicAssetUrl(
                                     normalizeAgentAvatar(agent.avatar, { role: agent.role }),
                                   )}
                                   alt={agent.name}

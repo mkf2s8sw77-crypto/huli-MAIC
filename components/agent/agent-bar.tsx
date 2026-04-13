@@ -23,8 +23,8 @@ import {
   Plus,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { withBasePath } from '@/lib/utils/base-path';
 import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import type { TTSProviderId } from '@/lib/audio/types';
 import type { ProviderWithVoices } from '@/lib/audio/voice-resolver';
@@ -583,7 +583,7 @@ export function AgentBar() {
       {teacherAgent && (
         <div className="size-8 rounded-full overflow-hidden ring-2 ring-blue-400/40 dark:ring-blue-500/30 shrink-0">
           <img
-            src={withBasePath(normalizeAgentAvatar(teacherAgent.avatar, { role: teacherAgent.role }))}
+            src={publicAssetUrl(normalizeAgentAvatar(teacherAgent.avatar, { role: teacherAgent.role }))}
             alt={getAgentName(teacherAgent)}
             className="size-full object-cover"
           />
@@ -596,7 +596,7 @@ export function AgentBar() {
             {agents.find((a) => a.role === 'assistant') && (
               <div className="size-6 rounded-full overflow-hidden ring-[1.5px] ring-background">
                 <img
-                  src={withBasePath(
+                  src={publicAssetUrl(
                     normalizeAgentAvatar(agents.find((a) => a.role === 'assistant')!.avatar, {
                       role: 'assistant',
                     }),
@@ -619,7 +619,7 @@ export function AgentBar() {
                   className="size-6 rounded-full overflow-hidden ring-[1.5px] ring-background"
                 >
                   <img
-                    src={withBasePath(normalizeAgentAvatar(agent.avatar, { role: agent.role }))}
+                    src={publicAssetUrl(normalizeAgentAvatar(agent.avatar, { role: agent.role }))}
                     alt={getAgentName(agent)}
                     className="size-full object-cover"
                   />
@@ -668,7 +668,7 @@ export function AgentBar() {
           style={{ boxShadow: isSelected ? `0 0 0 2px ${agent.color}30` : undefined }}
         >
           <img
-            src={withBasePath(normalizeAgentAvatar(agent.avatar, { role: agent.role }))}
+            src={publicAssetUrl(normalizeAgentAvatar(agent.avatar, { role: agent.role }))}
             alt={getAgentName(agent)}
             className="size-full object-cover"
           />
@@ -738,7 +738,7 @@ export function AgentBar() {
                     style={{ boxShadow: `0 0 0 2px ${teacherAgent.color}30` }}
                   >
                     <img
-                      src={withBasePath(
+                      src={publicAssetUrl(
                         normalizeAgentAvatar(teacherAgent.avatar, { role: teacherAgent.role }),
                       )}
                       alt={getAgentName(teacherAgent)}

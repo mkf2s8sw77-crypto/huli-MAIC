@@ -9,26 +9,10 @@
 
 import type { NextAuthConfig } from 'next-auth';
 import { withBasePath, stripBasePath } from '@/lib/utils/base-path';
+import { getAppOrigin, buildAppUrl as _buildAppUrl } from '@/lib/server/app-url';
 
-function getPublicOrigin(nextUrl: URL): string {
-  const configured =
-    process.env.APP_PUBLIC_ORIGIN?.trim() ||
-    process.env.AUTH_URL?.trim() ||
-    process.env.NEXTAUTH_URL?.trim();
-
-  if (configured) {
-    try {
-      return new URL(configured).origin;
-    } catch {
-      // ignore invalid env and fall back to request origin
-    }
-  }
-
-  return nextUrl.origin;
-}
-
-function buildAppUrl(nextUrl: URL, path: string): URL {
-  return new URL(withBasePath(path), getPublicOrigin(nextUrl));
+function buildAppUrl(path: string, nextUrl: URL, headers?: Headers): URL {
+  return _buildAppUrl(path, nextUrl, headers);
 }
 
 export const authConfig: NextAuthConfig = {
@@ -53,7 +37,8 @@ export const authConfig: NextAuthConfig = {
       }
       return session;
     },
-    authorized({ auth: session, request: { nextUrl } }) {
+    authorized({ auth: session, request }) {
+      const { nextUrl, headers } = request;
       const isLoggedIn = !!session?.user;
       const pathname = stripBasePath(nextUrl.pathname);
 
@@ -74,7 +59,7 @@ export const authConfig: NextAuthConfig = {
 
       if (isPublicPage || isPublicApi) {
         if (isLoggedIn && (pathname === '/login' || pathname === '/register')) {
-          return Response.redirect(buildAppUrl(nextUrl, '/'));
+          return Response.redirect(buildAppUrl('/', nextUrl, headers));
         }
         return true;
       }
@@ -83,11 +68,11 @@ export const authConfig: NextAuthConfig = {
         if (pathname.startsWith('/api/')) {
           return Response.json({ error: '未登录' }, { status: 401 });
         }
-        const loginUrl = buildAppUrl(nextUrl, '/login');
+        const loginUrl = buildAppUrl('/login', nextUrl, headers);
         const callbackPath = `${pathname || '/'}${nextUrl.search}`;
         loginUrl.searchParams.set(
           'callbackUrl',
-          `${getPublicOrigin(nextUrl)}${withBasePath(callbackPath)}`,
+          `${getAppOrigin(nextUrl, headers)}${withBasePath(callbackPath)}`,
         );
         return Response.redirect(loginUrl);
       }

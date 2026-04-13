@@ -1,8 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { NextRequest } from 'next/server';
 import type { Scene, Stage } from '@/lib/types/stage';
-import { BASE_PATH } from '@/lib/utils/base-path';
 import {
   CLASSROOMS_STORAGE_PATH,
   CLASSROOM_JOBS_STORAGE_PATH,
@@ -32,18 +30,6 @@ export async function writeJsonFileAtomic(filePath: string, data: unknown) {
   const content = JSON.stringify(data, null, 2);
   await fs.writeFile(tempFilePath, content, 'utf-8');
   await fs.rename(tempFilePath, filePath);
-}
-
-export function buildRequestOrigin(req: NextRequest): string {
-  const configuredOrigin = (process.env.APP_PUBLIC_ORIGIN || '').trim().replace(/\/+$/, '');
-  if (configuredOrigin) {
-    return BASE_PATH ? `${configuredOrigin}${BASE_PATH}` : configuredOrigin;
-  }
-
-  const origin = req.headers.get('x-forwarded-host')
-    ? `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('x-forwarded-host')}`
-    : req.nextUrl.origin;
-  return BASE_PATH ? `${origin}${BASE_PATH}` : origin;
 }
 
 export interface PersistedClassroomData {

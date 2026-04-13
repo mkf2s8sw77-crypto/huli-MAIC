@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import type { ProviderId } from '@/lib/ai/providers';
 import type { ProvidersConfig } from '@/lib/types/settings';
-import { withBasePath } from '@/lib/utils/base-path';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 import { formatContextWindow } from './utils';
 
 interface ModelSelectorProps {
@@ -213,7 +213,7 @@ export function ModelSelector({
               >
                 {provider.icon ? (
                   <img
-                    src={withBasePath(provider.icon)}
+                    src={publicAssetUrl(provider.icon)}
                     alt={getProviderDisplayName(provider.id, provider.name)}
                     className="w-5 h-5 shrink-0"
                     onError={(e) => {

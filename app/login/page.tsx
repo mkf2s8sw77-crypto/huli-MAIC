@@ -6,34 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { withBasePath } from '@/lib/utils/base-path';
-import { getAppHomeHref, navigateToAppHome } from '@/lib/utils/navigation';
+import { appLogoUrl } from '@/lib/utils/public-asset';
+import { getAppHomeHref, navigateToAppHome, resolveCallbackUrl } from '@/lib/utils/navigation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const resolveCallbackUrl = (): string => {
-    if (typeof window === 'undefined') {
-      return getAppHomeHref();
-    }
-
-    const raw = new URLSearchParams(window.location.search).get('callbackUrl');
-    if (!raw) {
-      return getAppHomeHref();
-    }
-
-    try {
-      const target = new URL(raw, window.location.origin);
-      if (target.origin !== window.location.origin) {
-        return getAppHomeHref();
-      }
-      return `${target.pathname}${target.search}${target.hash}` || getAppHomeHref();
-    } catch {
-      return getAppHomeHref();
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +49,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img
-            src={withBasePath('/huli-tech-logo.png')}
+            src={appLogoUrl()}
             alt="Logo"
             className="h-16 w-auto mx-auto rounded-2xl shadow-sm ring-1 ring-black/5 dark:ring-white/10 mb-4"
           />

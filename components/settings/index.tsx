@@ -58,7 +58,7 @@ import { GeneralSettings } from './general-settings';
 import { ModelEditDialog } from './model-edit-dialog';
 import { AddProviderDialog, type NewProviderData } from './add-provider-dialog';
 import type { SettingsSection, EditingModel } from '@/lib/types/settings';
-import { withBasePath } from '@/lib/utils/base-path';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 import { MEDIA_SETTINGS_LOCKED, VIDEO_SETTINGS_HIDDEN } from '@/lib/config/media-settings';
 
 // ─── Provider List Column (reusable) ───
@@ -97,7 +97,7 @@ function ProviderListColumn<T extends string>({
           >
             {provider.icon ? (
               <img
-                src={withBasePath(provider.icon)}
+                src={publicAssetUrl(provider.icon)}
                 alt={provider.name}
                 className="w-5 h-5 rounded"
                 onError={(e) => {
@@ -518,7 +518,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
             <>
               {selectedProvider.icon ? (
                 <img
-                  src={withBasePath(selectedProvider.icon)}
+                  src={publicAssetUrl(selectedProvider.icon)}
                   alt={selectedProvider.name}
                   className="w-8 h-8 rounded"
                   onError={(e) => {
@@ -549,7 +549,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {pdfProvider.icon ? (
               <img
-                src={withBasePath(pdfProvider.icon)}
+                src={publicAssetUrl(pdfProvider.icon)}
                 alt={pdfProvider.name}
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -569,7 +569,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {wsProvider.icon ? (
               <img
-                src={withBasePath(wsProvider.icon)}
+                src={publicAssetUrl(wsProvider.icon)}
                 alt={wsProvider.name}
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -590,7 +590,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {imgIcon ? (
               <img
-                src={withBasePath(imgIcon)}
+                src={publicAssetUrl(imgIcon)}
                 alt={imgProvider?.name}
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -613,7 +613,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {vidIcon ? (
               <img
-                src={withBasePath(vidIcon)}
+                src={publicAssetUrl(vidIcon)}
                 alt={vidProvider?.name}
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -635,7 +635,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {ttsIcon ? (
               <img
-                src={withBasePath(ttsIcon)}
+                src={publicAssetUrl(ttsIcon)}
                 alt=""
                 className="w-8 h-8 rounded"
                 onError={(e) => {
@@ -655,7 +655,7 @@ export function SettingsDialog({ open, onOpenChange, initialSection }: SettingsD
           <>
             {asrIcon ? (
               <img
-                src={withBasePath(asrIcon)}
+                src={publicAssetUrl(asrIcon)}
                 alt=""
                 className="w-8 h-8 rounded"
                 onError={(e) => {

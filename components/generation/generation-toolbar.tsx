@@ -19,7 +19,7 @@ import type { PDFProviderId } from '@/lib/pdf/types';
 import type { ProviderId } from '@/lib/ai/providers';
 import type { SettingsSection } from '@/lib/types/settings';
 import { MediaPopover } from '@/components/generation/media-popover';
-import { withBasePath } from '@/lib/utils/base-path';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 import { VIEWPORT_OPTIONS, type ViewportPreset } from '@/lib/config/viewport';
 import { HIDE_SETTINGS_UI } from '@/lib/config/frontend-controls';
 
@@ -191,7 +191,7 @@ export function GenerationToolbar({
                       <div className={cn('flex items-center gap-1.5', !available && 'opacity-50')}>
                         {provider.icon && (
                           <img
-                            src={withBasePath(provider.icon)}
+                            src={publicAssetUrl(provider.icon)}
                             alt={provider.name}
                             className="w-3.5 h-3.5"
                           />
@@ -380,7 +380,7 @@ function ModelSelectorPopover({
             >
               {currentProviderConfig?.icon ? (
                 <img
-                  src={withBasePath(currentProviderConfig.icon)}
+                  src={publicAssetUrl(currentProviderConfig.icon)}
                   alt={currentProviderConfig.name}
                   className="size-4 rounded-sm"
                 />
@@ -419,7 +419,7 @@ function ModelSelectorPopover({
                 >
                   {provider.icon ? (
                     <img
-                      src={withBasePath(provider.icon)}
+                      src={publicAssetUrl(provider.icon)}
                       alt={provider.name}
                       className="size-5 rounded-sm shrink-0"
                     />
@@ -456,7 +456,7 @@ function ModelSelectorPopover({
               <ChevronLeft className="size-3.5 text-muted-foreground" />
               {activeProvider.icon ? (
                 <img
-                  src={withBasePath(activeProvider.icon)}
+                  src={publicAssetUrl(activeProvider.icon)}
                   alt={activeProvider.name}
                   className="size-4 rounded-sm"
                 />

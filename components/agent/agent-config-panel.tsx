@@ -13,8 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { PlusIcon, Trash2Icon, EditIcon } from 'lucide-react';
-import { withBasePath } from '@/lib/utils/base-path';
 import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 
 export function AgentConfigPanel() {
   const { listAgents, deleteAgent } = useAgentRegistry();
@@ -64,7 +64,7 @@ export function AgentConfigPanel() {
                       }}
                     >
                       <AvatarImage
-                        src={withBasePath(normalizeAgentAvatar(agent.avatar, { role: agent.role }))}
+                        src={publicAssetUrl(normalizeAgentAvatar(agent.avatar, { role: agent.role }))}
                         alt={agent.name}
                       />
                       <AvatarFallback

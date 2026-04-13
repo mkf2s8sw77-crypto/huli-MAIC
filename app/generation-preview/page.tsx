@@ -387,6 +387,13 @@ function GenerationPreviewContent() {
         updatedAt: Date.now(),
       };
 
+      // Persist a minimal stage row before generated-agents are written.
+      // Otherwise /api/stages/:id/agents owner checks race ahead of stage creation
+      // and return a transient 403 on the first generation pass.
+      const store = useStageStore.getState();
+      store.setStage(stage);
+      await store.saveToStorage();
+
       if (settings.agentMode === 'auto') {
         const agentStepIdx = activeSteps.findIndex((s) => s.id === 'agent-generation');
         if (agentStepIdx >= 0) setCurrentStepIndex(agentStepIdx);
@@ -591,7 +598,6 @@ function GenerationPreviewContent() {
       }
 
       // Store stage and outlines
-      const store = useStageStore.getState();
       store.setStage(stage);
       // Persist the stage first so /api/stages/:id/outlines owner checks can pass.
       // Otherwise setOutlines() may race ahead and hit a transient 403 before the

@@ -27,7 +27,7 @@ import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import type { DiscussionAction } from '@/lib/types/action';
 import type { EngineMode, PlaybackView } from '@/lib/playback';
 import type { Participant } from '@/lib/types/roundtable';
-import { withBasePath } from '@/lib/utils/base-path';
+import { publicAssetUrl } from '@/lib/utils/public-asset';
 import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
 
 export interface DiscussionRequest {
@@ -90,7 +90,7 @@ function AvatarDisplay({ src, alt, className }: { src: string; alt?: string; cla
   if (isUrl) {
     return (
       <img
-        src={withBasePath(normalizeAgentAvatar(src))}
+        src={publicAssetUrl(normalizeAgentAvatar(src))}
         alt={alt || ''}
         className={cn('w-full h-full object-cover', className)}
       />
@@ -287,7 +287,7 @@ export function Roundtable({
   const teacherAvatar = teacherParticipant?.avatar || DEFAULT_TEACHER_AVATAR;
   const teacherName = teacherParticipant?.name || t('roundtable.teacher');
   const userAvatar = userParticipant?.avatar || DEFAULT_USER_AVATAR;
-  const teacherAvatarSrc = withBasePath(normalizeAgentAvatar(teacherAvatar, { role: 'teacher' }));
+  const teacherAvatarSrc = publicAssetUrl(normalizeAgentAvatar(teacherAvatar, { role: 'teacher' }));
 
   // Audio recording
   const { isRecording, isProcessing, startRecording, stopRecording } = useAudioRecorder({
@@ -1184,7 +1184,7 @@ export function Roundtable({
                     thinkingState?.stage === 'agent_loading' &&
                     thinkingState.agentId === student.id;
                   const agentConfig = useAgentRegistry.getState().getAgent(student.id);
-                  const studentAvatarSrc = withBasePath(
+                  const studentAvatarSrc = publicAssetUrl(
                     normalizeAgentAvatar(student.avatar, { role: student.role }),
                   );
                   const roleLabelKey = agentConfig?.role as
@@ -1322,7 +1322,7 @@ export function Roundtable({
                   const agentConfig = useAgentRegistry
                     .getState()
                     .getAgent(discussionRequest.agentId || '');
-                  const proactiveAvatarSrc = withBasePath(
+                  const proactiveAvatarSrc = publicAssetUrl(
                     normalizeAgentAvatar(matchedStudent?.avatar || agentConfig?.avatar, {
                       role: matchedStudent ? 'student' : agentConfig?.role,
                     }),

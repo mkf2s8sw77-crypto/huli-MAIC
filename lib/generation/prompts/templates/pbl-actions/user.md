@@ -10,5 +10,7 @@
 
 Please generate the speech content for this PBL scene.
 
+**Language Requirement (CRITICAL)**: {{language_guardrail}}
+
 Output as a JSON array directly (no explanation, no code fences):
 [{"type":"text","content":"Speech content"}]

@@ -17,6 +17,7 @@ import { parseJsonResponse } from './json-repair';
 import { uniquifyMediaElementIds } from './scene-builder';
 import type { AICallFn, GenerationResult, GenerationCallbacks } from './pipeline-types';
 import { createLogger } from '@/lib/logger';
+import { buildLanguageGuardrail, resolveRequirementLanguage } from './language-policy';
 const log = createLogger('Generation');
 
 /**
@@ -108,9 +109,14 @@ export async function generateSceneOutlinesFromRequirements(
     teacherContext?: string;
   },
 ): Promise<GenerationResult<SceneOutline[]>> {
+  const resolvedLanguage = resolveRequirementLanguage(
+    requirements.requirement,
+    requirements.language,
+  ).language;
+
   // Build available images description for the prompt
   let availableImagesText =
-    requirements.language === 'zh-CN' ? '无可用图片' : 'No images available';
+    resolvedLanguage === 'zh-CN' ? '无可用图片' : 'No images available';
   let visionImages: Array<{ id: string; src: string }> | undefined;
 
   if (pdfImages && pdfImages.length > 0) {
@@ -122,10 +128,10 @@ export async function generateSceneOutlinesFromRequirements(
       const noSrcImages = pdfImages.filter((img) => !options.imageMapping![img.id]);
 
       const visionDescriptions = visionSlice.map((img) =>
-        formatImagePlaceholder(img, requirements.language),
+        formatImagePlaceholder(img, resolvedLanguage),
       );
       const textDescriptions = [...textOnlySlice, ...noSrcImages].map((img) =>
-        formatImageDescription(img, requirements.language),
+        formatImageDescription(img, resolvedLanguage),
       );
       availableImagesText = [...visionDescriptions, ...textDescriptions].join('\n');
 
@@ -138,7 +144,7 @@ export async function generateSceneOutlinesFromRequirements(
     } else {
       // Text-only mode: full descriptions
       availableImagesText = pdfImages
-        .map((img) => formatImageDescription(img, requirements.language))
+        .map((img) => formatImageDescription(img, resolvedLanguage))
         .join('\n');
     }
   }
@@ -168,17 +174,18 @@ export async function generateSceneOutlinesFromRequirements(
   const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
     // New simplified variables
     requirement: requirements.requirement,
-    language: requirements.language,
+    language: resolvedLanguage,
+    language_guardrail: buildLanguageGuardrail(resolvedLanguage),
     pdfContent: pdfText
       ? pdfText.substring(0, MAX_PDF_CONTENT_CHARS)
-      : requirements.language === 'zh-CN'
+      : resolvedLanguage === 'zh-CN'
         ? '无'
         : 'None',
     availableImages: availableImagesText,
     userProfile: userProfileText,
     mediaGenerationPolicy,
     researchContext:
-      options?.researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
+      options?.researchContext || (resolvedLanguage === 'zh-CN' ? '无' : 'None'),
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
     teacherContext: options?.teacherContext || '',
     // Orientation-aware outline rules: portrait gets finer-grained scene splitting
@@ -213,7 +220,10 @@ export async function generateSceneOutlinesFromRequirements(
       ...outline,
       id: outline.id || nanoid(),
       order: index + 1,
-      language: requirements.language,
+      language: resolvedLanguage,
+      pblConfig: outline.pblConfig
+        ? { ...outline.pblConfig, language: resolvedLanguage }
+        : undefined,
     }));
     const sanitized = enforcePortraitOutlineMediaPolicy(enriched, requirements.viewportPreset);
 

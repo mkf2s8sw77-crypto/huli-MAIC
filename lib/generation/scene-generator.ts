@@ -59,6 +59,11 @@ import {
 } from './portrait-manifest-prompt';
 import { renderPortraitTemplate } from './portrait-template-engine';
 import { isValidManifest, type PortraitContentManifest } from './portrait-content-schema';
+import {
+  buildLanguageGuardrail,
+  getLanguageLabel,
+  resolveOutlineLanguage,
+} from './language-policy';
 const log = createLogger('Generation');
 
 // ==================== Stage 2: Full Scenes (Two-Step) ====================
@@ -183,16 +188,16 @@ export async function generateSceneContent(
       `Interactive outline "${outline.title}" missing interactiveConfig, falling back to slide`,
     );
     const fallbackOutline = { ...outline, type: 'slide' as const };
-      return generateSlideContent(
-        fallbackOutline,
-        aiCall,
-        assignedImages,
-        imageMapping,
-        visionEnabled,
-        generatedMediaMapping,
-        agents,
-        viewport,
-      );
+    return generateSlideContent(
+      fallbackOutline,
+      aiCall,
+      assignedImages,
+      imageMapping,
+      visionEnabled,
+      generatedMediaMapping,
+      agents,
+      viewport,
+    );
   }
 
   switch (outline.type) {
@@ -210,7 +215,11 @@ export async function generateSceneContent(
     case 'quiz':
       return generateQuizContent(outline, aiCall);
     case 'interactive':
-      return generateInteractiveContent(outline, aiCall, outline.language);
+      return generateInteractiveContent(
+        outline,
+        aiCall,
+        resolveOutlineLanguage(outline, outline.language).language,
+      );
     case 'pbl':
       return generatePBLSceneContent(outline, languageModel);
     default:
@@ -787,7 +796,7 @@ async function generateSlideContent(
   agents?: AgentInfo[],
   viewport?: { viewportPreset?: ViewportPreset; viewportSize?: number; viewportRatio?: number },
 ): Promise<GeneratedSlideContent | null> {
-  const lang = outline.language || 'zh-CN';
+  const lang = resolveOutlineLanguage(outline, outline.language).language;
 
   // Canvas dimensions (matching viewportSize and viewportRatio)
   const viewportPreset = viewport?.viewportPreset || DEFAULT_VIEWPORT_PRESET;
@@ -896,6 +905,7 @@ async function generateSlideContent(
     canvas_orientation: canvasOrientation,
     orientation_design_rules: orientationDesignRules,
     teacherContext,
+    language_guardrail: buildLanguageGuardrail(lang),
   });
 
   if (!prompts) {
@@ -1008,6 +1018,7 @@ async function generateQuizContent(
   outline: SceneOutline,
   aiCall: AICallFn,
 ): Promise<GeneratedQuizContent | null> {
+  const lang = resolveOutlineLanguage(outline, outline.language).language;
   const quizConfig = outline.quizConfig || {
     questionCount: 3,
     difficulty: 'medium',
@@ -1021,6 +1032,7 @@ async function generateQuizContent(
     questionCount: quizConfig.questionCount,
     difficulty: quizConfig.difficulty,
     questionTypes: quizConfig.questionTypes.join(', '),
+    language_guardrail: buildLanguageGuardrail(lang),
   });
 
   if (!prompts) {
@@ -1113,6 +1125,7 @@ async function generateInteractiveContent(
   language: 'zh-CN' | 'en-US' = 'zh-CN',
 ): Promise<GeneratedInteractiveContent | null> {
   const config = outline.interactiveConfig!;
+  const effectiveLanguage = resolveOutlineLanguage(outline, language).language;
 
   // Step 1: Scientific modeling (with fallback on failure)
   let scientificModel: ScientificModel | undefined;
@@ -1167,7 +1180,9 @@ async function generateInteractiveContent(
     keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
     scientificConstraints,
     designIdea: config.designIdea,
-    language,
+    language: effectiveLanguage,
+    language_guardrail: buildLanguageGuardrail(effectiveLanguage),
+    language_label: getLanguageLabel(effectiveLanguage),
   });
 
   if (!htmlPrompts) {
@@ -1293,6 +1308,8 @@ export async function generateSceneActions(
   userProfile?: string,
 ): Promise<Action[]> {
   const agentsText = formatAgentsForPrompt(agents);
+  const lang = resolveOutlineLanguage(outline, outline.language).language;
+  const languageGuardrail = buildLanguageGuardrail(lang);
 
   if (outline.type === 'slide' && 'elements' in content) {
     // Format element list for AI to select from
@@ -1306,6 +1323,7 @@ export async function generateSceneActions(
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
       userProfile: userProfile || '',
+      language_guardrail: languageGuardrail,
     });
 
     if (!prompts) {
@@ -1334,6 +1352,7 @@ export async function generateSceneActions(
       questions: questionsText,
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
+      language_guardrail: languageGuardrail,
     });
 
     if (!prompts) {
@@ -1361,6 +1380,7 @@ export async function generateSceneActions(
       designIdea: config?.designIdea || '',
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
+      language_guardrail: languageGuardrail,
     });
 
     if (!prompts) {
@@ -1388,6 +1408,7 @@ export async function generateSceneActions(
       projectDescription: pblConfig?.projectDescription || outline.description,
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
+      language_guardrail: languageGuardrail,
     });
 
     if (!prompts) {

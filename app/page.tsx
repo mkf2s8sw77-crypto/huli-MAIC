@@ -59,6 +59,7 @@ import {
   type ViewportPreset,
   getAspectRatioCssValueByRatio,
 } from '@/lib/config/viewport';
+import { resolveRequirementLanguage } from '@/lib/generation/language-policy';
 
 const log = createLogger('Home');
 
@@ -282,9 +283,13 @@ function HomePage() {
 
     try {
       const userProfile = useUserProfileStore.getState();
+      const resolvedLanguage = resolveRequirementLanguage(form.requirement, form.language).language;
+      if (resolvedLanguage !== form.language) {
+        updateForm('language', resolvedLanguage);
+      }
       const requirements: UserRequirements = {
         requirement: form.requirement,
-        language: form.language,
+        language: resolvedLanguage,
         viewportPreset: form.viewportPreset,
         userNickname: userProfile.nickname || undefined,
         userBio: userProfile.bio || undefined,

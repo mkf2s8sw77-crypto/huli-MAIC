@@ -37,6 +37,10 @@ import {
   buildOutlineOrientationRules,
   enforcePortraitOutlineMediaPolicy,
 } from '@/lib/generation/outline-generator';
+import {
+  buildLanguageGuardrail,
+  resolveRequirementLanguage,
+} from '@/lib/generation/language-policy';
 const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
@@ -123,13 +127,17 @@ export async function POST(req: NextRequest) {
       agents?: AgentInfo[];
     };
     requirementSnippet = requirements?.requirement?.substring(0, 60);
+    const resolvedLanguage = resolveRequirementLanguage(
+      requirements.requirement,
+      requirements.language,
+    ).language;
 
     // Detect vision capability
     const hasVision = !!modelInfo?.capabilities?.vision;
 
     // Build prompt (same logic as generateSceneOutlinesFromRequirements)
     let availableImagesText =
-      requirements.language === 'zh-CN' ? '无可用图片' : 'No images available';
+      resolvedLanguage === 'zh-CN' ? '无可用图片' : 'No images available';
     let visionImages: Array<{ id: string; src: string }> | undefined;
 
     if (pdfImages && pdfImages.length > 0) {
@@ -141,10 +149,10 @@ export async function POST(req: NextRequest) {
         const noSrcImages = pdfImages.filter((img) => !imageMapping[img.id]);
 
         const visionDescriptions = visionSlice.map((img) =>
-          formatImagePlaceholder(img, requirements.language),
+          formatImagePlaceholder(img, resolvedLanguage),
         );
         const textDescriptions = [...textOnlySlice, ...noSrcImages].map((img) =>
-          formatImageDescription(img, requirements.language),
+          formatImageDescription(img, resolvedLanguage),
         );
         availableImagesText = [...visionDescriptions, ...textDescriptions].join('\n');
 
@@ -157,7 +165,7 @@ export async function POST(req: NextRequest) {
       } else {
         // Text-only mode: full descriptions
         availableImagesText = pdfImages
-          .map((img) => formatImageDescription(img, requirements.language))
+          .map((img) => formatImageDescription(img, resolvedLanguage))
           .join('\n');
       }
     }
@@ -182,14 +190,15 @@ export async function POST(req: NextRequest) {
 
     const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
       requirement: requirements.requirement,
-      language: requirements.language,
+      language: resolvedLanguage,
+      language_guardrail: buildLanguageGuardrail(resolvedLanguage),
       pdfContent: pdfText
         ? pdfText.substring(0, MAX_PDF_CONTENT_CHARS)
-        : requirements.language === 'zh-CN'
+        : resolvedLanguage === 'zh-CN'
           ? '无'
           : 'None',
       availableImages: availableImagesText,
-      researchContext: researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
+      researchContext: researchContext || (resolvedLanguage === 'zh-CN' ? '无' : 'None'),
       mediaGenerationPolicy,
       teacherContext,
       // Orientation-aware outline rules: portrait gets finer-grained scene splitting
@@ -273,6 +282,10 @@ export async function POST(req: NextRequest) {
                     ...outline,
                     id: outline.id || nanoid(),
                     order: parsedOutlines.length + 1,
+                    language: resolvedLanguage,
+                    pblConfig: outline.pblConfig
+                      ? { ...outline.pblConfig, language: resolvedLanguage }
+                      : undefined,
                   };
                   const sanitized = enforcePortraitOutlineMediaPolicy(
                     [enriched],

@@ -1,6 +1,11 @@
 // lib/generation/portrait-manifest-prompt.ts
 
 import type { SceneOutline, PdfImage } from '@/lib/types/generation';
+import {
+  buildLanguageGuardrail,
+  getLanguageLabel,
+  resolveOutlineLanguage,
+} from './language-policy';
 
 /**
  * System prompt: 指导 AI 输出 PortraitContentManifest，而非元素坐标列表。
@@ -62,6 +67,7 @@ Put the key information in heroBlock.body or a supportingCard. Do NOT generate s
 - heroBlock.body: the single most important idea on this page
 - supportingCards: supporting details, maximum 3 cards
 - Keep all text values short — the layout engine cannot shrink text to fit
+- If the scene topic is Chinese, keep the full manifest text in Simplified Chinese unless the user explicitly asked for English
 
 ## accentColor
 Use a strong accessible color:
@@ -76,6 +82,7 @@ export function buildPortraitManifestUserPrompt(
   outline: SceneOutline,
   assignedImages?: PdfImage[],
 ): string {
+  const language = resolveOutlineLanguage(outline, outline.language).language;
   const keyPointsList = (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n');
 
   const imageSection =
@@ -85,7 +92,9 @@ export function buildPortraitManifestUserPrompt(
 
   return `Scene Title: ${outline.title}
 Description: ${outline.description || '(none)'}
-Language: ${outline.language || 'zh-CN'}
+Language: ${getLanguageLabel(language)}
+
+Language Requirement: ${buildLanguageGuardrail(language)}
 
 Key Points:
 ${keyPointsList || '(none)'}

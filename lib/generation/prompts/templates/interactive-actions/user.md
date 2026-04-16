@@ -7,6 +7,7 @@ Key Points: {{keyPoints}}
 {{agents}}
 
 **Language Requirement (CRITICAL)**: {{language_guardrail}}
+**Language Directive**: {{languageDirective}}
 
 Output as a JSON array directly (no explanation, no code fences, 3-6 speech segments):
 [{"type":"text","content":"Opening speech content"}]

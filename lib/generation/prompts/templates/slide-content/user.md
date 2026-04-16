@@ -19,6 +19,8 @@
 Based on the scene information above, generate a complete Canvas/PPT component for one page.
 
 **Language Requirement (CRITICAL)**: {{language_guardrail}}
+## Language Directive
+{{languageDirective}}
 
 **Must Follow**:
 

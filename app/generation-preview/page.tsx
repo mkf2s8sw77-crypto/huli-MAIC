@@ -41,6 +41,27 @@ import {
 
 const log = createLogger('GenerationPreview');
 
+const GENERATED_AGENT_AVATAR_DESCRIPTIONS: Record<(typeof GENERATED_AGENT_AVATARS)[number], string> = {
+  '/avatars/teacher.png': 'Male teacher with glasses, holding a book, green background',
+  '/avatars/teacher-2.png':
+    'Female teacher with long dark hair, blue traditional outfit, gentle expression',
+  '/avatars/assist.png': 'Young female assistant with glasses, pink background, friendly smile',
+  '/avatars/assist-2.png':
+    'Young female in orange top and purple overalls, cheerful and approachable',
+  '/avatars/clown.png': 'Energetic girl with glasses pointing up, green shirt, lively and fun',
+  '/avatars/clown-2.png':
+    'Playful girl with curly hair doing rock gesture, blue shirt, humorous vibe',
+  '/avatars/curious.png': 'Surprised boy with glasses, hand on cheek, curious expression',
+  '/avatars/curious-2.png':
+    'Boy with backpack holding a book and question mark bubble, inquisitive',
+  '/avatars/note-taker.png': 'Studious boy with glasses, blue shirt, calm and organized',
+  '/avatars/note-taker-2.png':
+    'Active boy with yellow backpack waving, blue outfit, enthusiastic learner',
+  '/avatars/thinker.png': 'Thoughtful girl with hand on chin, purple background, contemplative',
+  '/avatars/thinker-2.png':
+    'Girl reading a book intently, long dark hair, intellectual and focused',
+};
+
 function isInsufficientTTSBalance(message: string | undefined): boolean {
   return !!message && /insufficient balance|余额不足/i.test(message);
 }
@@ -362,7 +383,152 @@ function GenerationPreviewContent() {
         imageMapping = currentSession.imageMapping;
       }
 
-      // ── Agent generation (before outlines so persona can influence structure) ──
+      // Create stage client-side
+      const stageId = nanoid(10);
+      const stage: Stage = {
+        id: stageId,
+        name: extractTopicFromRequirement(currentSession.requirements.requirement),
+        description: '',
+        language: currentSession.requirements.language || 'zh-CN',
+        style: 'professional',
+        viewportPreset: currentSession.requirements.viewportPreset || ('3:4' as ViewportPreset),
+        viewportSize: DEFAULT_VIEWPORT_SIZE,
+        viewportRatio: getViewportRatio(
+          currentSession.requirements.viewportPreset || ('3:4' as ViewportPreset),
+        ),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      // ── Generate outlines first (infers languageDirective) ──
+      let outlines = currentSession.sceneOutlines;
+      let languageDirective: string | undefined;
+
+      const outlineStepIdx = activeSteps.findIndex((s) => s.id === 'outline');
+      setCurrentStepIndex(outlineStepIdx >= 0 ? outlineStepIdx : 0);
+      if (!outlines || outlines.length === 0) {
+        log.debug('=== Generating outlines (SSE) ===');
+        setStreamingOutlines([]);
+
+        const outlineResult = await new Promise<{
+          outlines: SceneOutline[];
+          languageDirective: string;
+        }>((resolve, reject) => {
+          const collected: SceneOutline[] = [];
+          let directive: string | undefined;
+
+          fetch('/api/generate/scene-outlines-stream', {
+            method: 'POST',
+            headers: getApiHeaders(),
+            body: JSON.stringify({
+              requirements: currentSession.requirements,
+              pdfText: currentSession.pdfText,
+              pdfImages: currentSession.pdfImages,
+              imageMapping,
+              researchContext: currentSession.researchContext,
+            }),
+            signal,
+          })
+            .then((res) => {
+              if (!res.ok) {
+                return res.json().then((d) => {
+                  reject(new Error(d.error || t('generation.outlineGenerateFailed')));
+                });
+              }
+
+              const reader = res.body?.getReader();
+              if (!reader) {
+                reject(new Error(t('generation.streamNotReadable')));
+                return;
+              }
+
+              const decoder = new TextDecoder();
+              let sseBuffer = '';
+
+              const pump = (): Promise<void> =>
+                reader.read().then(({ done, value }) => {
+                  if (value) {
+                    sseBuffer += decoder.decode(value, { stream: !done });
+                    const lines = sseBuffer.split('\n');
+                    sseBuffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                      if (!line.startsWith('data: ')) continue;
+                      try {
+                        const evt = JSON.parse(line.slice(6));
+                        if (evt.type === 'languageDirective') {
+                          directive = evt.data;
+                        } else if (evt.type === 'outline') {
+                          collected.push(evt.data);
+                          setStreamingOutlines([...collected]);
+                        } else if (evt.type === 'retry') {
+                          collected.length = 0;
+                          setStreamingOutlines([]);
+                          setStatusMessage(t('generation.outlineRetrying'));
+                        } else if (evt.type === 'done') {
+                          directive = evt.languageDirective || directive;
+                          resolve({
+                            outlines: evt.outlines || collected,
+                            languageDirective:
+                              directive ||
+                              'Teach in the language that matches the user requirement.',
+                          });
+                          return;
+                        } else if (evt.type === 'error') {
+                          reject(new Error(evt.error));
+                          return;
+                        }
+                      } catch (e) {
+                        log.error('Failed to parse outline SSE:', line, e);
+                      }
+                    }
+                  }
+                  if (done) {
+                    if (collected.length > 0) {
+                      resolve({
+                        outlines: collected,
+                        languageDirective:
+                          directive || 'Teach in the language that matches the user requirement.',
+                      });
+                    } else {
+                      reject(new Error(t('generation.outlineEmptyResponse')));
+                    }
+                    return;
+                  }
+                  return pump();
+                });
+
+              pump().catch(reject);
+            })
+            .catch(reject);
+        });
+
+        outlines = outlineResult.outlines;
+        languageDirective = outlineResult.languageDirective;
+
+        // Store languageDirective on the stage
+        stage.languageDirective = languageDirective;
+
+        const updatedSession = {
+          ...currentSession,
+          sceneOutlines: outlines,
+          languageDirective,
+        };
+        setSession(updatedSession);
+        sessionStorage.setItem('generationSession', JSON.stringify(updatedSession));
+
+        // Outline generation succeeded — clear homepage draft cache
+        try {
+          localStorage.removeItem('requirementDraft');
+        } catch {
+          /* ignore */
+        }
+
+        // Brief pause to let user see the final outline state
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+
+      // ── Agent generation (after outlines — uses languageDirective + outlines) ──
       const settings = useSettingsStore.getState();
       let agents: Array<{
         id: string;
@@ -371,35 +537,21 @@ function GenerationPreviewContent() {
         persona?: string;
       }> = [];
 
-      // Create stage client-side (needed for agent generation stageId)
-      const stageId = nanoid(10);
-      const viewportPreset = currentSession.requirements.viewportPreset || ('3:4' as ViewportPreset);
-      const stage: Stage = {
-        id: stageId,
-        name: extractTopicFromRequirement(currentSession.requirements.requirement),
-        description: '',
-        language: currentSession.requirements.language || 'zh-CN',
-        style: 'professional',
-        viewportPreset,
-        viewportSize: DEFAULT_VIEWPORT_SIZE,
-        viewportRatio: getViewportRatio(viewportPreset),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
       // Persist a minimal stage row before generated-agents are written.
       // Otherwise /api/stages/:id/agents owner checks race ahead of stage creation
       // and return a transient 403 on the first generation pass.
       const store = useStageStore.getState();
       store.setStage(stage);
       await store.saveToStorage();
-
       if (settings.agentMode === 'auto') {
         const agentStepIdx = activeSteps.findIndex((s) => s.id === 'agent-generation');
         if (agentStepIdx >= 0) setCurrentStepIndex(agentStepIdx);
 
         try {
-          const allAvatars = [...GENERATED_AGENT_AVATARS];
+          const allAvatars = GENERATED_AGENT_AVATARS.map((path) => ({
+            path,
+            desc: GENERATED_AGENT_AVATAR_DESCRIPTIONS[path],
+          }));
 
           const getAvailableVoicesForGeneration = () => {
             const providers = getAvailableProvidersWithVoices(settings.ttsProvidersConfig);
@@ -412,14 +564,15 @@ function GenerationPreviewContent() {
             );
           };
 
-          // No outlines yet — agent generation uses only stage name + description
           const agentResp = await fetch('/api/generate/agent-profiles', {
             method: 'POST',
             headers: getApiHeaders(),
             body: JSON.stringify({
               stageInfo: { name: stage.name, description: stage.description },
-              language: currentSession.requirements.language || 'zh-CN',
-              availableAvatars: allAvatars,
+              sceneOutlines: outlines.map((o) => ({ title: o.title, description: o.description })),
+              languageDirective,
+              availableAvatars: allAvatars.map((a) => a.path),
+              avatarDescriptions: allAvatars.map((a) => ({ path: a.path, desc: a.desc })),
               availableVoices: getAvailableVoicesForGeneration(),
             }),
             signal,
@@ -489,108 +642,6 @@ function GenerationPreviewContent() {
         stage.agentIds = presetAgentIds;
       }
 
-      // ── Generate outlines (with agent personas for teacher context) ──
-      let outlines = currentSession.sceneOutlines;
-
-      const outlineStepIdx = activeSteps.findIndex((s) => s.id === 'outline');
-      setCurrentStepIndex(outlineStepIdx >= 0 ? outlineStepIdx : 0);
-      if (!outlines || outlines.length === 0) {
-        log.debug('=== Generating outlines (SSE) ===');
-        setStreamingOutlines([]);
-
-        outlines = await new Promise<SceneOutline[]>((resolve, reject) => {
-          const collected: SceneOutline[] = [];
-
-          fetch('/api/generate/scene-outlines-stream', {
-            method: 'POST',
-            headers: getApiHeaders(),
-            body: JSON.stringify({
-              requirements: currentSession.requirements,
-              pdfText: currentSession.pdfText,
-              pdfImages: currentSession.pdfImages,
-              imageMapping,
-              researchContext: currentSession.researchContext,
-              agents,
-            }),
-            signal,
-          })
-            .then((res) => {
-              if (!res.ok) {
-                return res.json().then((d) => {
-                  reject(new Error(d.error || t('generation.outlineGenerateFailed')));
-                });
-              }
-
-              const reader = res.body?.getReader();
-              if (!reader) {
-                reject(new Error(t('generation.streamNotReadable')));
-                return;
-              }
-
-              const decoder = new TextDecoder();
-              let sseBuffer = '';
-
-              const pump = (): Promise<void> =>
-                reader.read().then(({ done, value }) => {
-                  if (value) {
-                    sseBuffer += decoder.decode(value, { stream: !done });
-                    const lines = sseBuffer.split('\n');
-                    sseBuffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                      if (!line.startsWith('data: ')) continue;
-                      try {
-                        const evt = JSON.parse(line.slice(6));
-                        if (evt.type === 'outline') {
-                          collected.push(evt.data);
-                          setStreamingOutlines([...collected]);
-                        } else if (evt.type === 'retry') {
-                          collected.length = 0;
-                          setStreamingOutlines([]);
-                          setStatusMessage(t('generation.outlineRetrying'));
-                        } else if (evt.type === 'done') {
-                          resolve(evt.outlines || collected);
-                          return;
-                        } else if (evt.type === 'error') {
-                          reject(new Error(evt.error));
-                          return;
-                        }
-                      } catch (e) {
-                        log.error('Failed to parse outline SSE:', line, e);
-                      }
-                    }
-                  }
-                  if (done) {
-                    if (collected.length > 0) {
-                      resolve(collected);
-                    } else {
-                      reject(new Error(t('generation.outlineEmptyResponse')));
-                    }
-                    return;
-                  }
-                  return pump();
-                });
-
-              pump().catch(reject);
-            })
-            .catch(reject);
-        });
-
-        const updatedSession = { ...currentSession, sceneOutlines: outlines };
-        setSession(updatedSession);
-        sessionStorage.setItem('generationSession', JSON.stringify(updatedSession));
-
-        // Outline generation succeeded — clear homepage draft cache
-        try {
-          localStorage.removeItem('requirementDraft');
-        } catch {
-          /* ignore */
-        }
-
-        // Brief pause to let user see the final outline state
-        await new Promise((resolve) => setTimeout(resolve, 800));
-      }
-
       // Move to scene generation step
       setStatusMessage('');
       if (!outlines || outlines.length === 0) {
@@ -613,7 +664,6 @@ function GenerationPreviewContent() {
       const stageInfo = {
         name: stage.name,
         description: stage.description,
-        language: stage.language,
         style: stage.style,
         viewportPreset: stage.viewportPreset,
         viewportSize: stage.viewportSize,
@@ -642,6 +692,7 @@ function GenerationPreviewContent() {
           stageInfo,
           stageId: stage.id,
           agents,
+          languageDirective,
         }),
         signal,
       });
@@ -672,6 +723,7 @@ function GenerationPreviewContent() {
           agents,
           previousSpeeches: [],
           userProfile,
+          languageDirective,
         }),
         signal,
       });
@@ -711,7 +763,10 @@ function GenerationPreviewContent() {
                 ttsVoice: settings.ttsVoice,
                 ttsSpeed: settings.ttsSpeed,
                 ttsApiKey: ttsProviderConfig?.apiKey || undefined,
-                ttsBaseUrl: ttsProviderConfig?.baseUrl || undefined,
+                ttsBaseUrl:
+                  ttsProviderConfig?.baseUrl ||
+                  ttsProviderConfig?.customDefaultBaseUrl ||
+                  undefined,
               }),
               signal,
             });
@@ -778,6 +833,7 @@ function GenerationPreviewContent() {
           pdfImages: currentSession.pdfImages,
           agents,
           userProfile,
+          languageDirective,
         }),
       );
 

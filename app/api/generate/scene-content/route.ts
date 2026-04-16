@@ -148,6 +148,7 @@ export async function POST(req: NextRequest) {
       stageInfo,
       stageId,
       agents,
+      languageDirective,
     } = body as {
       outline: SceneOutline;
       allOutlines: SceneOutline[];
@@ -156,7 +157,7 @@ export async function POST(req: NextRequest) {
       stageInfo: {
         name: string;
         description?: string;
-        language?: string;
+        language?: 'zh-CN' | 'en-US';
         style?: string;
         viewportPreset?: ViewportPreset;
         viewportSize?: number;
@@ -164,6 +165,7 @@ export async function POST(req: NextRequest) {
       };
       stageId: string;
       agents?: AgentInfo[];
+      languageDirective?: string;
     };
 
     // Validate required fields
@@ -191,7 +193,7 @@ export async function POST(req: NextRequest) {
     };
 
     // ── Model resolution from request headers ──
-    const { model: languageModel, modelInfo, modelString } = resolveModelFromHeaders(req);
+    const { model: languageModel, modelInfo, modelString } = await resolveModelFromHeaders(req);
     outlineTitle = rawOutline?.title;
     resolvedModelString = modelString;
 
@@ -260,21 +262,20 @@ export async function POST(req: NextRequest) {
 
     let content: ReturnType<typeof buildLocalFallbackSlideContent> | Awaited<ReturnType<typeof generateSceneContent>> | null = null;
     try {
-      content = await generateSceneContent(
-        effectiveOutline,
-        aiCall,
+      content = await generateSceneContent(effectiveOutline, aiCall, {
         assignedImages,
         imageMapping,
-        effectiveOutline.type === 'pbl' ? languageModel : undefined,
-        hasVision,
+        languageModel: effectiveOutline.type === 'pbl' ? languageModel : undefined,
+        visionEnabled: hasVision,
         generatedMediaMapping,
         agents,
-        {
+        languageDirective,
+        viewport: {
           viewportPreset: stageInfo?.viewportPreset,
           viewportSize: stageInfo?.viewportSize,
           viewportRatio: stageInfo?.viewportRatio,
         },
-      );
+      });
     } catch (error) {
       if (effectiveOutline.type === 'slide') {
         log.warn(

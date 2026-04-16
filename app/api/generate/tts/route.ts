@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     const isServerManagedProvider = ttsProviderId === 'tencent-tts';
     const clientBaseUrl = isServerManagedProvider ? undefined : ttsBaseUrl || undefined;
     if (clientBaseUrl && process.env.NODE_ENV === 'production') {
-      const ssrfError = validateUrlForSSRF(clientBaseUrl);
+      const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
         return apiError('INVALID_URL', 403, ssrfError);
       }

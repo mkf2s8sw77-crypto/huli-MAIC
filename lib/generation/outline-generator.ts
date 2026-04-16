@@ -18,6 +18,7 @@ import { uniquifyMediaElementIds } from './scene-builder';
 import type { AICallFn, GenerationResult, GenerationCallbacks } from './pipeline-types';
 import { createLogger } from '@/lib/logger';
 import { buildLanguageGuardrail, resolveRequirementLanguage } from './language-policy';
+
 const log = createLogger('Generation');
 
 /**
@@ -60,8 +61,9 @@ This course uses a **portrait canvas** (${viewportPreset}). Portrait content is 
 - Do NOT add \`suggestedImageIds\` to any portrait scene, even if PDF images are available
 - Do NOT add \`mediaGenerations\` to any portrait scene, even for opening/cover pages
 - If a visual aid seems useful, convert it into text cards or step cards instead of using an image`;
-  } else {
-    return `### Landscape Orientation Outline Design (${viewportPreset || '16:9'})
+  }
+
+  return `### Landscape Orientation Outline Design (${viewportPreset || '16:9'})
 
 This course uses a **landscape canvas** (${viewportPreset || '16:9'}). Standard presentation pacing applies — do NOT fragment scenes unnecessarily.
 
@@ -70,7 +72,6 @@ This course uses a **landscape canvas** (${viewportPreset || '16:9'}). Standard 
 - Target **1-2 scenes per minute** of course duration
 - Side-by-side comparisons and three-column overviews are fine when content warrants them
 - Do NOT split scenes just to increase count — concise, well-structured scenes are preferred`;
-  }
 }
 
 function stripPortraitMediaFromOutline(outline: SceneOutline): SceneOutline {
@@ -108,20 +109,17 @@ export async function generateSceneOutlinesFromRequirements(
     researchContext?: string;
     teacherContext?: string;
   },
-): Promise<GenerationResult<SceneOutline[]>> {
+): Promise<GenerationResult<{ languageDirective: string; outlines: SceneOutline[] }>> {
   const resolvedLanguage = resolveRequirementLanguage(
     requirements.requirement,
     requirements.language,
   ).language;
 
-  // Build available images description for the prompt
-  let availableImagesText =
-    resolvedLanguage === 'zh-CN' ? '无可用图片' : 'No images available';
+  let availableImagesText = resolvedLanguage === 'zh-CN' ? '无可用图片' : 'No images available';
   let visionImages: Array<{ id: string; src: string }> | undefined;
 
   if (pdfImages && pdfImages.length > 0) {
     if (options?.visionEnabled && options?.imageMapping) {
-      // Vision mode: split into vision images (first N) and text-only (rest)
       const allWithSrc = pdfImages.filter((img) => options.imageMapping![img.id]);
       const visionSlice = allWithSrc.slice(0, MAX_VISION_IMAGES);
       const textOnlySlice = allWithSrc.slice(MAX_VISION_IMAGES);
@@ -142,20 +140,17 @@ export async function generateSceneOutlinesFromRequirements(
         height: img.height,
       }));
     } else {
-      // Text-only mode: full descriptions
       availableImagesText = pdfImages
         .map((img) => formatImageDescription(img, resolvedLanguage))
         .join('\n');
     }
   }
 
-  // Build user profile string for prompt injection
   const userProfileText =
     requirements.userNickname || requirements.userBio
       ? `## Student Profile\n\nStudent: ${requirements.userNickname || 'Unknown'}${requirements.userBio ? ` — ${requirements.userBio}` : ''}\n\nConsider this student's background when designing the course. Adapt difficulty, examples, and teaching approach accordingly.\n\n---`
       : '';
 
-  // Build media generation policy based on enabled flags
   const imageEnabled = options?.imageGenerationEnabled ?? false;
   const videoEnabled = options?.videoGenerationEnabled ?? false;
   let mediaGenerationPolicy = '';
@@ -170,9 +165,7 @@ export async function generateSceneOutlinesFromRequirements(
       '**IMPORTANT: Do NOT include any video mediaGenerations (type: "video") in the outlines. Video generation is disabled. Image generation is allowed.**';
   }
 
-  // Use simplified prompt variables
   const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
-    // New simplified variables
     requirement: requirements.requirement,
     language: resolvedLanguage,
     language_guardrail: buildLanguageGuardrail(resolvedLanguage),
@@ -186,9 +179,7 @@ export async function generateSceneOutlinesFromRequirements(
     mediaGenerationPolicy,
     researchContext:
       options?.researchContext || (resolvedLanguage === 'zh-CN' ? '无' : 'None'),
-    // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
     teacherContext: options?.teacherContext || '',
-    // Orientation-aware outline rules: portrait gets finer-grained scene splitting
     outline_orientation_rules: buildOutlineOrientationRules(requirements.viewportPreset),
   });
 
@@ -207,27 +198,37 @@ export async function generateSceneOutlinesFromRequirements(
     });
 
     const response = await aiCall(prompts.system, prompts.user, visionImages);
-    const outlines = parseJsonResponse<SceneOutline[]>(response);
+    const parsed = parseJsonResponse<
+      { languageDirective: string; outlines: SceneOutline[] } | SceneOutline[]
+    >(response);
 
-    if (!outlines || !Array.isArray(outlines)) {
-      return {
-        success: false,
-        error: 'Failed to parse scene outlines response',
-      };
+    let languageDirective: string;
+    let rawOutlines: SceneOutline[];
+
+    if (Array.isArray(parsed)) {
+      languageDirective =
+        resolvedLanguage === 'zh-CN'
+          ? '请使用与用户需求一致的语言授课。'
+          : 'Teach in the language that matches the user requirement.';
+      rawOutlines = parsed;
+    } else if (parsed && Array.isArray(parsed.outlines)) {
+      languageDirective =
+        parsed.languageDirective ||
+        (resolvedLanguage === 'zh-CN'
+          ? '请使用与用户需求一致的语言授课。'
+          : 'Teach in the language that matches the user requirement.');
+      rawOutlines = parsed.outlines;
+    } else {
+      return { success: false, error: 'Failed to parse scene outlines response' };
     }
-    // Ensure IDs, order, and language
-    const enriched = outlines.map((outline, index) => ({
+
+    const enriched = rawOutlines.map((outline, index) => ({
       ...outline,
       id: outline.id || nanoid(),
       order: index + 1,
       language: resolvedLanguage,
-      pblConfig: outline.pblConfig
-        ? { ...outline.pblConfig, language: resolvedLanguage }
-        : undefined,
     }));
     const sanitized = enforcePortraitOutlineMediaPolicy(enriched, requirements.viewportPreset);
-
-    // Replace sequential gen_img_N/gen_vid_N with globally unique IDs
     const result = uniquifyMediaElementIds(sanitized);
 
     callbacks?.onProgress?.({
@@ -239,7 +240,7 @@ export async function generateSceneOutlinesFromRequirements(
       totalScenes: result.length,
     });
 
-    return { success: true, data: result };
+    return { success: true, data: { languageDirective, outlines: result } };
   } catch (error) {
     return { success: false, error: String(error) };
   }

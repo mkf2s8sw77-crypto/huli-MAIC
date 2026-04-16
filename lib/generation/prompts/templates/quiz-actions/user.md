@@ -6,6 +6,7 @@ Description: {{description}}
 {{agents}}
 
 **Language Requirement (CRITICAL)**: {{language_guardrail}}
+**Language Directive**: {{languageDirective}}
 
 Output as a JSON array directly (no explanation, no code fences, 3-6 segments):
 [{"type":"text","content":"Let's test your understanding"}]

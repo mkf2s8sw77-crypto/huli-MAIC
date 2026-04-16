@@ -245,7 +245,7 @@ function dbRowToStage(row: StageRow): Stage & { currentSceneId?: string | null }
     id: row.id,
     name: row.name,
     description: row.description ?? undefined,
-    language: row.language ?? undefined,
+    language: (row.language as Stage['language']) ?? undefined,
     style: row.style ?? undefined,
     viewportPreset: row.viewportPreset as Stage['viewportPreset'],
     viewportSize: row.viewportSize ?? undefined,

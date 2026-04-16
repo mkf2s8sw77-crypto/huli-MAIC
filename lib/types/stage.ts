@@ -17,10 +17,11 @@ export interface Stage {
   id: string;
   name: string;
   description?: string;
+  language?: 'zh-CN' | 'en-US';
   createdAt: number;
   updatedAt: number;
   // Stage metadata
-  language?: string;
+  languageDirective?: string;
   style?: string;
   viewportPreset?: ViewportPreset;
   viewportSize?: number;

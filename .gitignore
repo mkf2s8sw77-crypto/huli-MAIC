@@ -79,3 +79,4 @@ next-env.d.ts
 
 # local secrets
 minimax-key.txt
+tests/generation/*.eval.result.md

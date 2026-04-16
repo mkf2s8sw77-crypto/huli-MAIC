@@ -8,6 +8,8 @@
 {{courseContext}}
 {{agents}}
 
+**Language Directive**: {{languageDirective}}
+
 Please generate the speech content for this PBL scene.
 
 **Language Requirement (CRITICAL)**: {{language_guardrail}}

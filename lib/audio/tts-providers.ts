@@ -93,6 +93,7 @@
  */
 
 import type { TTSModelConfig } from './types';
+import { isCustomTTSProvider } from './types';
 import { TTS_PROVIDERS } from './constants';
 import * as tencentcloud from 'tencentcloud-sdk-nodejs-tts';
 import { randomUUID } from 'crypto';
@@ -122,13 +123,10 @@ export async function generateTTS(
   config: TTSModelConfig,
   text: string,
 ): Promise<TTSGenerationResult> {
-  const provider = TTS_PROVIDERS[config.providerId];
-  if (!provider) {
-    throw new Error(`Unknown TTS provider: ${config.providerId}`);
-  }
+  const provider = TTS_PROVIDERS[config.providerId as keyof typeof TTS_PROVIDERS];
 
-  // Validate API key if required
-  if (provider.requiresApiKey && !config.apiKey) {
+  // Validate API key if required (only for built-in providers with known config)
+  if (provider?.requiresApiKey && !config.apiKey) {
     throw new Error(`API key required for TTS provider: ${config.providerId}`);
   }
 
@@ -161,6 +159,9 @@ export async function generateTTS(
       );
 
     default:
+      if (isCustomTTSProvider(config.providerId)) {
+        return await generateOpenAITTS(config, text);
+      }
       throw new Error(`Unsupported TTS provider: ${config.providerId}`);
   }
 }
@@ -471,6 +472,92 @@ async function generateMiniMaxTTS(
   };
 }
 
+/**
+ * ElevenLabs TTS implementation (direct API call with voice-specific endpoint)
+ */
+async function generateElevenLabsTTS(
+  config: TTSModelConfig,
+  text: string,
+): Promise<TTSGenerationResult> {
+  const baseUrl = config.baseUrl || TTS_PROVIDERS['elevenlabs-tts'].defaultBaseUrl;
+  const requestedFormat = config.format || 'mp3';
+  const clampedSpeed = Math.min(1.2, Math.max(0.7, config.speed || 1.0));
+  const outputFormatMap: Record<string, string> = {
+    mp3: 'mp3_44100_128',
+    opus: 'opus_48000_96',
+    pcm: 'pcm_44100',
+    wav: 'wav_44100',
+    ulaw: 'ulaw_8000',
+    alaw: 'alaw_8000',
+  };
+  const outputFormat = outputFormatMap[requestedFormat] || outputFormatMap.mp3;
+
+  const response = await fetch(
+    `${baseUrl}/text-to-speech/${encodeURIComponent(config.voice)}?output_format=${outputFormat}`,
+    {
+      method: 'POST',
+      headers: {
+        'xi-api-key': config.apiKey!,
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: config.modelId || 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+          speed: clampedSpeed,
+        },
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => response.statusText);
+    throw new Error(`ElevenLabs TTS API error: ${errorText || response.statusText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return {
+    audio: new Uint8Array(arrayBuffer),
+    format: requestedFormat,
+  };
+}
+
+/**
+ * Get current TTS configuration from settings store
+ * Note: This function should only be called in browser context
+ */
+export async function getCurrentTTSConfig(): Promise<TTSModelConfig> {
+  if (typeof window === 'undefined') {
+    throw new Error('getCurrentTTSConfig() can only be called in browser context');
+  }
+
+  // Lazy import to avoid circular dependency
+  const { useSettingsStore } = await import('@/lib/store/settings');
+  const { ttsProviderId, ttsVoice, ttsSpeed, ttsProvidersConfig } = useSettingsStore.getState();
+
+  const providerConfig = ttsProvidersConfig?.[ttsProviderId];
+
+  return {
+    providerId: ttsProviderId,
+    modelId:
+      providerConfig?.modelId ||
+      TTS_PROVIDERS[ttsProviderId as keyof typeof TTS_PROVIDERS]?.defaultModelId ||
+      '',
+    apiKey: providerConfig?.apiKey,
+    baseUrl: providerConfig?.baseUrl || providerConfig?.customDefaultBaseUrl,
+    voice: ttsVoice,
+    speed: ttsSpeed,
+  };
+}
+
+// Re-export from constants for convenience
+export { getAllTTSProviders, getTTSProvider, getTTSVoices } from './constants';
+
+/**
+ * Doubao TTS 2.0 implementation (Volcengine Seed-TTS 2.0)
+ */
 async function generateDoubaoTTS(
   config: TTSModelConfig,
   text: string,
@@ -562,86 +649,6 @@ async function generateDoubaoTTS(
 
   return { audio: combined, format: 'mp3' };
 }
-
-/**
- * ElevenLabs TTS implementation (direct API call with voice-specific endpoint)
- */
-async function generateElevenLabsTTS(
-  config: TTSModelConfig,
-  text: string,
-): Promise<TTSGenerationResult> {
-  const baseUrl = config.baseUrl || TTS_PROVIDERS['elevenlabs-tts'].defaultBaseUrl;
-  const requestedFormat = config.format || 'mp3';
-  const clampedSpeed = Math.min(1.2, Math.max(0.7, config.speed || 1.0));
-  const outputFormatMap: Record<string, string> = {
-    mp3: 'mp3_44100_128',
-    opus: 'opus_48000_96',
-    pcm: 'pcm_44100',
-    wav: 'wav_44100',
-    ulaw: 'ulaw_8000',
-    alaw: 'alaw_8000',
-  };
-  const outputFormat = outputFormatMap[requestedFormat] || outputFormatMap.mp3;
-
-  const response = await fetch(
-    `${baseUrl}/text-to-speech/${encodeURIComponent(config.voice)}?output_format=${outputFormat}`,
-    {
-      method: 'POST',
-      headers: {
-        'xi-api-key': config.apiKey!,
-        'Content-Type': 'application/json; charset=utf-8',
-      },
-      body: JSON.stringify({
-        text,
-        model_id: config.modelId || 'eleven_multilingual_v2',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          speed: clampedSpeed,
-        },
-      }),
-    },
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => response.statusText);
-    throw new Error(`ElevenLabs TTS API error: ${errorText || response.statusText}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return {
-    audio: new Uint8Array(arrayBuffer),
-    format: requestedFormat,
-  };
-}
-
-/**
- * Get current TTS configuration from settings store
- * Note: This function should only be called in browser context
- */
-export async function getCurrentTTSConfig(): Promise<TTSModelConfig> {
-  if (typeof window === 'undefined') {
-    throw new Error('getCurrentTTSConfig() can only be called in browser context');
-  }
-
-  // Lazy import to avoid circular dependency
-  const { useSettingsStore } = await import('@/lib/store/settings');
-  const { ttsProviderId, ttsVoice, ttsSpeed, ttsProvidersConfig } = useSettingsStore.getState();
-
-  const providerConfig = ttsProvidersConfig?.[ttsProviderId];
-
-  return {
-    providerId: ttsProviderId,
-    modelId: providerConfig?.modelId || TTS_PROVIDERS[ttsProviderId]?.defaultModelId || '',
-    apiKey: providerConfig?.apiKey,
-    baseUrl: providerConfig?.baseUrl,
-    voice: ttsVoice,
-    speed: ttsSpeed,
-  };
-}
-
-// Re-export from constants for convenience
-export { getAllTTSProviders, getTTSProvider, getTTSVoices } from './constants';
 
 /**
  * Escape XML special characters for SSML

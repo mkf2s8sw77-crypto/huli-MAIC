@@ -28,6 +28,7 @@ import { parseActionsFromStructuredOutput } from './action-parser';
 import { parseJsonResponse } from './json-repair';
 import {
   buildCourseContext,
+  buildLanguageText,
   formatAgentsForPrompt,
   formatTeacherPersonaForPrompt,
   formatImageDescription,
@@ -66,6 +67,30 @@ import {
 } from './language-policy';
 const log = createLogger('Generation');
 
+// ── Options interfaces for scene generation functions ──
+
+export interface SceneContentOptions {
+  assignedImages?: PdfImage[];
+  imageMapping?: ImageMapping;
+  languageModel?: LanguageModel;
+  visionEnabled?: boolean;
+  generatedMediaMapping?: ImageMapping;
+  agents?: AgentInfo[];
+  languageDirective?: string;
+  viewport?: {
+    viewportPreset?: ViewportPreset;
+    viewportSize?: number;
+    viewportRatio?: number;
+  };
+}
+
+export interface SceneActionsOptions {
+  ctx?: SceneGenerationContext;
+  agents?: AgentInfo[];
+  userProfile?: string;
+  languageDirective?: string;
+}
+
 // ==================== Stage 2: Full Scenes (Two-Step) ====================
 
 /**
@@ -82,6 +107,7 @@ export async function generateFullScenes(
   store: StageStore,
   aiCall: AICallFn,
   callbacks?: GenerationCallbacks,
+  languageDirective?: string,
 ): Promise<GenerationResult<string[]>> {
   const api = createStageAPI(store);
   const totalScenes = sceneOutlines.length;
@@ -100,7 +126,7 @@ export async function generateFullScenes(
   const results = await Promise.all(
     sceneOutlines.map(async (outline, index) => {
       try {
-        const sceneId = await generateSingleScene(outline, api, aiCall);
+        const sceneId = await generateSingleScene(outline, api, aiCall, languageDirective);
 
         // Update progress (not atomic, but sufficient for UI display)
         completedCount++;
@@ -144,10 +170,11 @@ async function generateSingleScene(
   outline: SceneOutline,
   api: ReturnType<typeof createStageAPI>,
   aiCall: AICallFn,
+  languageDirective?: string,
 ): Promise<string | null> {
   // Step 3.1: Generate content
   log.info(`Step 3.1: Generating content for: ${outline.title}`);
-  const content = await generateSceneContent(outline, aiCall);
+  const content = await generateSceneContent(outline, aiCall, { languageDirective });
   if (!content) {
     log.error(`Failed to generate content for: ${outline.title}`);
     return null;
@@ -155,7 +182,7 @@ async function generateSingleScene(
 
   // Step 3.2: Generate Actions
   log.info(`Step 3.2: Generating actions for: ${outline.title}`);
-  const actions = await generateSceneActions(outline, content, aiCall);
+  const actions = await generateSceneActions(outline, content, aiCall, { languageDirective });
   log.info(`Generated ${actions.length} actions for: ${outline.title}`);
 
   // Create complete Scene
@@ -168,13 +195,7 @@ async function generateSingleScene(
 export async function generateSceneContent(
   outline: SceneOutline,
   aiCall: AICallFn,
-  assignedImages?: PdfImage[],
-  imageMapping?: ImageMapping,
-  languageModel?: LanguageModel,
-  visionEnabled?: boolean,
-  generatedMediaMapping?: ImageMapping,
-  agents?: AgentInfo[],
-  viewport?: { viewportPreset?: ViewportPreset; viewportSize?: number; viewportRatio?: number },
+  options: SceneContentOptions = {},
 ): Promise<
   | GeneratedSlideContent
   | GeneratedQuizContent
@@ -182,6 +203,16 @@ export async function generateSceneContent(
   | GeneratedPBLContent
   | null
 > {
+  const {
+    assignedImages,
+    imageMapping,
+    languageModel,
+    visionEnabled,
+    generatedMediaMapping,
+    agents,
+    languageDirective,
+    viewport,
+  } = options;
   // If outline is interactive but missing interactiveConfig, fall back to slide
   if (outline.type === 'interactive' && !outline.interactiveConfig) {
     log.warn(
@@ -197,6 +228,7 @@ export async function generateSceneContent(
       generatedMediaMapping,
       agents,
       viewport,
+      languageDirective,
     );
   }
 
@@ -211,17 +243,14 @@ export async function generateSceneContent(
         generatedMediaMapping,
         agents,
         viewport,
+        languageDirective,
       );
     case 'quiz':
-      return generateQuizContent(outline, aiCall);
+      return generateQuizContent(outline, aiCall, languageDirective);
     case 'interactive':
-      return generateInteractiveContent(
-        outline,
-        aiCall,
-        resolveOutlineLanguage(outline, outline.language).language,
-      );
+      return generateInteractiveContent(outline, aiCall, languageDirective);
     case 'pbl':
-      return generatePBLSceneContent(outline, languageModel);
+      return generatePBLSceneContent(outline, languageModel, languageDirective);
     default:
       return null;
   }
@@ -795,10 +824,9 @@ async function generateSlideContent(
   generatedMediaMapping?: ImageMapping,
   agents?: AgentInfo[],
   viewport?: { viewportPreset?: ViewportPreset; viewportSize?: number; viewportRatio?: number },
+  languageDirective?: string,
 ): Promise<GeneratedSlideContent | null> {
   const lang = resolveOutlineLanguage(outline, outline.language).language;
-
-  // Canvas dimensions (matching viewportSize and viewportRatio)
   const viewportPreset = viewport?.viewportPreset || DEFAULT_VIEWPORT_PRESET;
   const canvasWidth = viewport?.viewportSize || DEFAULT_VIEWPORT_SIZE;
   const canvasHeight =
@@ -808,7 +836,10 @@ async function generateSlideContent(
   const isPortrait = canvasHeight > canvasWidth;
 
   // Build assigned images description for the prompt
-  let assignedImagesText = '无可用图片，禁止插入任何 image 元素';
+  let assignedImagesText =
+    lang === 'zh-CN'
+      ? '无可用图片。不要插入任何图片元素。'
+      : 'No images available. Do NOT insert any image elements.';
   let visionImages: Array<{ id: string; src: string }> | undefined;
 
   if (!isPortrait && assignedImages && assignedImages.length > 0) {
@@ -859,7 +890,7 @@ async function generateSlideContent(
 
     if (mediaParts.length > 0) {
       const mediaText = mediaParts.join('\n\n');
-      if (assignedImagesText.includes('禁止插入') || assignedImagesText.includes('No images')) {
+      if (assignedImagesText.includes('No images')) {
         assignedImagesText = mediaText;
       } else {
         assignedImagesText += `\n\n${mediaText}`;
@@ -906,6 +937,7 @@ async function generateSlideContent(
     orientation_design_rules: orientationDesignRules,
     teacherContext,
     language_guardrail: buildLanguageGuardrail(lang),
+    languageDirective: buildLanguageText(languageDirective, outline.languageNote),
   });
 
   if (!prompts) {
@@ -1017,6 +1049,7 @@ async function generateSlideContent(
 async function generateQuizContent(
   outline: SceneOutline,
   aiCall: AICallFn,
+  languageDirective?: string,
 ): Promise<GeneratedQuizContent | null> {
   const lang = resolveOutlineLanguage(outline, outline.language).language;
   const quizConfig = outline.quizConfig || {
@@ -1033,6 +1066,7 @@ async function generateQuizContent(
     difficulty: quizConfig.difficulty,
     questionTypes: quizConfig.questionTypes.join(', '),
     language_guardrail: buildLanguageGuardrail(lang),
+    languageDirective: buildLanguageText(languageDirective, outline.languageNote),
   });
 
   if (!prompts) {
@@ -1122,10 +1156,10 @@ function normalizeQuizAnswer(question: Record<string, unknown>): string[] | unde
 async function generateInteractiveContent(
   outline: SceneOutline,
   aiCall: AICallFn,
-  language: 'zh-CN' | 'en-US' = 'zh-CN',
+  languageDirective?: string,
 ): Promise<GeneratedInteractiveContent | null> {
   const config = outline.interactiveConfig!;
-  const effectiveLanguage = resolveOutlineLanguage(outline, language).language;
+  const effectiveLanguage = resolveOutlineLanguage(outline, outline.language).language;
 
   // Step 1: Scientific modeling (with fallback on failure)
   let scientificModel: ScientificModel | undefined;
@@ -1183,6 +1217,7 @@ async function generateInteractiveContent(
     language: effectiveLanguage,
     language_guardrail: buildLanguageGuardrail(effectiveLanguage),
     language_label: getLanguageLabel(effectiveLanguage),
+    languageDirective: buildLanguageText(languageDirective, outline.languageNote),
   });
 
   if (!htmlPrompts) {
@@ -1216,6 +1251,7 @@ async function generateInteractiveContent(
 async function generatePBLSceneContent(
   outline: SceneOutline,
   languageModel?: LanguageModel,
+  languageDirective?: string,
 ): Promise<GeneratedPBLContent | null> {
   if (!languageModel) {
     log.error('LanguageModel required for PBL generation');
@@ -1237,7 +1273,8 @@ async function generatePBLSceneContent(
         projectDescription: pblConfig.projectDescription,
         targetSkills: pblConfig.targetSkills,
         issueCount: pblConfig.issueCount,
-        language: pblConfig.language,
+        languageDirective:
+          languageDirective || 'Teach in the language that matches the user requirement.',
       },
       languageModel,
       {
@@ -1303,10 +1340,9 @@ export async function generateSceneActions(
     | GeneratedInteractiveContent
     | GeneratedPBLContent,
   aiCall: AICallFn,
-  ctx?: SceneGenerationContext,
-  agents?: AgentInfo[],
-  userProfile?: string,
+  options: SceneActionsOptions = {},
 ): Promise<Action[]> {
+  const { ctx, agents, userProfile, languageDirective } = options;
   const agentsText = formatAgentsForPrompt(agents);
   const lang = resolveOutlineLanguage(outline, outline.language).language;
   const languageGuardrail = buildLanguageGuardrail(lang);
@@ -1324,6 +1360,7 @@ export async function generateSceneActions(
       agents: agentsText,
       userProfile: userProfile || '',
       language_guardrail: languageGuardrail,
+      languageDirective: buildLanguageText(languageDirective, outline.languageNote),
     });
 
     if (!prompts) {
@@ -1359,6 +1396,7 @@ export async function generateSceneActions(
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
       language_guardrail: languageGuardrail,
+      languageDirective: buildLanguageText(languageDirective, outline.languageNote),
     });
 
     if (!prompts) {
@@ -1393,6 +1431,7 @@ export async function generateSceneActions(
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
       language_guardrail: languageGuardrail,
+      languageDirective: buildLanguageText(languageDirective, outline.languageNote),
     });
 
     if (!prompts) {
@@ -1430,6 +1469,7 @@ export async function generateSceneActions(
       courseContext: buildCourseContext(ctx),
       agents: agentsText,
       language_guardrail: languageGuardrail,
+      languageDirective: buildLanguageText(languageDirective, outline.languageNote),
     });
 
     if (!prompts) {

@@ -87,7 +87,18 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith('/api/access-code/') || pathname === '/api/health') {
+  const accessCodePublicApiPrefixes = [
+    '/api/access-code',
+    '/api/health',
+    '/api/server-providers',
+    '/api/public-assets',
+  ];
+
+  if (
+    accessCodePublicApiPrefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    )
+  ) {
     return NextResponse.next();
   }
 

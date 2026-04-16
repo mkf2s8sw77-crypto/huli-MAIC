@@ -10,7 +10,7 @@ import { appLogoUrl } from '@/lib/utils/public-asset';
 import { getAppHomeHref, navigateToAppHome, resolveCallbackUrl } from '@/lib/utils/navigation';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,13 +22,13 @@ export default function LoginPage() {
 
     try {
       const result = await signIn('credentials', {
-        email: email.trim().toLowerCase(),
+        identifier: identifier.trim().toLowerCase(),
         password,
         redirect: false,
       });
 
       if (result?.error) {
-        setError('邮箱或密码错误');
+        setError('用户名/邮箱或密码错误');
       } else {
         const callbackUrl = resolveCallbackUrl();
         if (callbackUrl === getAppHomeHref()) {
@@ -59,15 +59,15 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">邮箱</Label>
+            <Label htmlFor="identifier">用户名或邮箱</Label>
             <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="identifier"
+              type="text"
+              placeholder="username 或 you@example.com"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
-              autoComplete="email"
+              autoComplete="username"
               autoFocus
             />
           </div>

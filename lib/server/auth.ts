@@ -18,6 +18,12 @@ import { users } from './db/schema';
 import { eq } from 'drizzle-orm';
 import { runMigrations } from './db/migrate';
 import { authConfig } from './auth.config';
+import {
+  EMAIL_RE,
+  isEmailIdentifier,
+  normalizeLoginIdentifier,
+  validateUsername,
+} from '@/lib/auth/identity';
 
 let _migrated = false;
 
@@ -38,18 +44,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Credentials({
       name: 'credentials',
       credentials: {
+        identifier: { label: 'Email or username', type: 'text' },
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
         ensureMigrated();
 
-        const email = (credentials?.email as string)?.trim().toLowerCase();
+        const identifier = normalizeLoginIdentifier(
+          credentials?.identifier || credentials?.email,
+        );
         const password = credentials?.password as string;
-        if (!email || !password) return null;
+        if (!identifier || !password) return null;
 
         const db = getDb();
-        const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+        const [user] = isEmailIdentifier(identifier)
+          ? EMAIL_RE.test(identifier)
+            ? await db.select().from(users).where(eq(users.email, identifier)).limit(1)
+            : []
+          : validateUsername(identifier) === null
+            ? await db.select().from(users).where(eq(users.username, identifier)).limit(1)
+            : [];
         if (!user) return null;
 
         const isValid = await compare(password, user.passwordHash);

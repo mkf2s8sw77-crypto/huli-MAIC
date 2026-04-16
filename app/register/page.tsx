@@ -11,6 +11,7 @@ import { getAppHomeHref, navigateToAppHome, resolveCallbackUrl } from '@/lib/uti
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nickname, setNickname] = useState('');
@@ -23,6 +24,10 @@ export default function RegisterPage() {
 
     if (password !== confirmPassword) {
       setError('两次输入的密码不一致');
+      return;
+    }
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}$/.test(username.trim())) {
+      setError('用户名需为 3-32 位字母、数字、点、下划线或短横线，并以字母或数字开头');
       return;
     }
     if (password.length < 6) {
@@ -38,6 +43,7 @@ export default function RegisterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
+          username: username.trim().toLowerCase(),
           password,
           nickname: nickname.trim(),
         }),
@@ -52,7 +58,7 @@ export default function RegisterPage() {
 
       // 注册成功后自动登录
       const signInResult = await signIn('credentials', {
-        email: email.trim().toLowerCase(),
+        identifier: username.trim().toLowerCase(),
         password,
         redirect: false,
       });
@@ -99,6 +105,22 @@ export default function RegisterPage() {
               required
               autoComplete="email"
               autoFocus
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="username">用户名</Label>
+            <Input
+              id="username"
+              type="text"
+              placeholder="3-32 位字母、数字、点、下划线或短横线"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              minLength={3}
+              maxLength={32}
+              pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}"
+              autoComplete="username"
             />
           </div>
 

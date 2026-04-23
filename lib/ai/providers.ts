@@ -448,10 +448,29 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     name: 'GLM',
     type: 'openai',
     defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    alternateBaseUrls: [
+      { label: 'settings.baseUrlRegion.china', url: 'https://open.bigmodel.cn/api/paas/v4' },
+      { label: 'settings.baseUrlRegion.international', url: 'https://api.z.ai/api/paas/v4' },
+    ],
     requiresApiKey: true,
     icon: '/logos/glm.svg',
     models: [
-      // GLM-5 Series - Latest flagship model
+      // GLM-5.1 Series - Latest flagship model
+      {
+        id: 'glm-5.1',
+        name: 'GLM-5.1',
+        contextWindow: 200000,
+        outputWindow: 128000,
+        capabilities: { streaming: true, tools: true, vision: false },
+      },
+      {
+        id: 'glm-5v-turbo',
+        name: 'GLM-5V-Turbo',
+        contextWindow: 200000,
+        outputWindow: 128000,
+        capabilities: { streaming: true, tools: true, vision: true },
+      },
+      // GLM-5 Series
       {
         id: 'glm-5',
         name: 'GLM-5',
@@ -622,6 +641,10 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     name: 'Kimi',
     type: 'openai',
     defaultBaseUrl: 'https://api.moonshot.cn/v1',
+    alternateBaseUrls: [
+      { label: 'settings.baseUrlRegion.china', url: 'https://api.moonshot.cn/v1' },
+      { label: 'settings.baseUrlRegion.international', url: 'https://api.moonshot.ai/v1' },
+    ],
     requiresApiKey: true,
     icon: '/logos/kimi.png',
     models: [
@@ -701,6 +724,10 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     name: 'MiniMax',
     type: 'anthropic',
     defaultBaseUrl: 'https://api.minimaxi.com/anthropic/v1',
+    alternateBaseUrls: [
+      { label: 'settings.baseUrlRegion.china', url: 'https://api.minimaxi.com/anthropic/v1' },
+      { label: 'settings.baseUrlRegion.international', url: 'https://api.minimax.io/anthropic/v1' },
+    ],
     requiresApiKey: true,
     icon: '/logos/minimax.svg',
     models: [

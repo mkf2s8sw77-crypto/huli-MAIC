@@ -11,7 +11,7 @@ import type {
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
-import { buildPrompt, PROMPT_IDS } from './prompts';
+import { buildPrompt, PROMPT_IDS } from '@/lib/prompts';
 import { formatImageDescription, formatImagePlaceholder } from './prompt-formatters';
 import { parseJsonResponse } from './json-repair';
 import { uniquifyMediaElementIds } from './scene-builder';
@@ -168,7 +168,7 @@ export async function generateSceneOutlinesFromRequirements(
   const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
     requirement: requirements.requirement,
     language: resolvedLanguage,
-    language_guardrail: buildLanguageGuardrail(resolvedLanguage),
+    languageGuardrail: buildLanguageGuardrail(resolvedLanguage),
     pdfContent: pdfText
       ? pdfText.substring(0, MAX_PDF_CONTENT_CHARS)
       : resolvedLanguage === 'zh-CN'
@@ -180,7 +180,7 @@ export async function generateSceneOutlinesFromRequirements(
     researchContext:
       options?.researchContext || (resolvedLanguage === 'zh-CN' ? '无' : 'None'),
     teacherContext: options?.teacherContext || '',
-    outline_orientation_rules: buildOutlineOrientationRules(requirements.viewportPreset),
+    outlineOrientationRules: buildOutlineOrientationRules(requirements.viewportPreset),
   });
 
   if (!prompts) {
@@ -248,16 +248,19 @@ export async function generateSceneOutlinesFromRequirements(
 
 /**
  * Apply type fallbacks for outlines that can't be generated as their declared type.
- * - interactive without interactiveConfig → slide
+ * - interactive without interactiveConfig OR widgetType+widgetOutline → slide
  * - pbl without pblConfig or languageModel → slide
  */
 export function applyOutlineFallbacks(
   outline: SceneOutline,
   hasLanguageModel: boolean,
 ): SceneOutline {
-  if (outline.type === 'interactive' && !outline.interactiveConfig) {
+  // Ultra Mode: interactive scenes with widgetType + widgetOutline are valid
+  const hasWidgetConfig = outline.widgetType && outline.widgetOutline;
+
+  if (outline.type === 'interactive' && !outline.interactiveConfig && !hasWidgetConfig) {
     log.warn(
-      `Interactive outline "${outline.title}" missing interactiveConfig, falling back to slide`,
+      `Interactive outline "${outline.title}" missing interactiveConfig and widget config, falling back to slide`,
     );
     return { ...outline, type: 'slide' };
   }

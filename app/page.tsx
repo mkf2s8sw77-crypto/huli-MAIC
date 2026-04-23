@@ -19,6 +19,7 @@ import {
   BotOff,
   ChevronUp,
   Upload,
+  Atom,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { LanguageSwitcher } from '@/components/language-switcher';
@@ -69,6 +70,7 @@ const WEB_SEARCH_STORAGE_KEY = 'webSearchEnabled';
 const LANGUAGE_STORAGE_KEY = 'generationLanguage';
 const VIEWPORT_PRESET_STORAGE_KEY = 'generationViewportPreset';
 const RECENT_OPEN_STORAGE_KEY = 'recentClassroomsOpen';
+const INTERACTIVE_MODE_STORAGE_KEY = 'interactiveModeEnabled';
 
 interface FormState {
   pdfFile: File | null;
@@ -76,6 +78,7 @@ interface FormState {
   language: 'zh-CN' | 'en-US';
   viewportPreset: ViewportPreset;
   webSearch: boolean;
+  interactiveMode: boolean;
 }
 
 const initialFormState: FormState = {
@@ -84,6 +87,7 @@ const initialFormState: FormState = {
   language: 'zh-CN',
   viewportPreset: DEFAULT_VIEWPORT_PRESET,
   webSearch: false,
+  interactiveMode: false,
 };
 
 function HomePage() {
@@ -118,6 +122,7 @@ function HomePage() {
       const savedWebSearch = localStorage.getItem(WEB_SEARCH_STORAGE_KEY);
       const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
       const savedViewportPreset = localStorage.getItem(VIEWPORT_PRESET_STORAGE_KEY);
+      const savedInteractiveMode = localStorage.getItem(INTERACTIVE_MODE_STORAGE_KEY);
       const updates: Partial<FormState> = {};
       if (savedWebSearch === 'true') updates.webSearch = true;
       if (savedLanguage === 'zh-CN' || savedLanguage === 'en-US') {
@@ -129,6 +134,7 @@ function HomePage() {
       if (savedViewportPreset && VIEWPORT_OPTIONS.some((option) => option.id === savedViewportPreset)) {
         updates.viewportPreset = savedViewportPreset as ViewportPreset;
       }
+      if (savedInteractiveMode === 'true') updates.interactiveMode = true;
       if (Object.keys(updates).length > 0) {
         setForm((prev) => ({ ...prev, ...updates }));
       }
@@ -234,6 +240,8 @@ function HomePage() {
       if (field === 'viewportPreset') {
         localStorage.setItem(VIEWPORT_PRESET_STORAGE_KEY, String(value));
       }
+      if (field === 'interactiveMode')
+        localStorage.setItem(INTERACTIVE_MODE_STORAGE_KEY, String(value));
       if (field === 'requirement') updateRequirementCache(value as string);
     } catch {
       /* ignore */
@@ -302,6 +310,7 @@ function HomePage() {
         userNickname: userProfile.nickname || undefined,
         userBio: userProfile.bio || undefined,
         webSearch: form.webSearch || undefined,
+        interactiveMode: form.interactiveMode,
       };
 
       let pdfStorageKey: string | undefined;
@@ -582,6 +591,37 @@ function HomePage() {
 
               {/* Actions row */}
               <div className="flex items-center gap-2 justify-end shrink-0">
+                {/* Interactive mode toggle */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                      onClick={() => updateForm('interactiveMode', !form.interactiveMode)}
+                      className={cn(
+                        'relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all cursor-pointer select-none whitespace-nowrap border shrink-0 h-8',
+                        form.interactiveMode
+                          ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.35)] dark:shadow-[0_0_12px_rgba(6,182,212,0.25)]'
+                          : 'border-cyan-300/60 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/20',
+                      )}
+                    >
+                      {form.interactiveMode && (
+                        <span
+                          className="absolute inset-[-4px] rounded-full border border-cyan-400/40 dark:border-cyan-400/25"
+                          style={{
+                            animation: 'interactive-mode-breathe 2s ease-in-out infinite',
+                          }}
+                        />
+                      )}
+                      <Atom className="size-3.5 relative z-10 animate-[spin_3s_linear_infinite]" />
+                      <span className="relative z-10">{t('toolbar.interactiveModeLabel')}</span>
+                    </motion.button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    {t('toolbar.interactiveModeHint')}
+                  </TooltipContent>
+                </Tooltip>
+
                 {/* Voice input */}
                 <SpeechButton
                   size="md"

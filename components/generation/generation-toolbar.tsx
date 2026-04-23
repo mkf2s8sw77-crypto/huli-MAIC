@@ -19,7 +19,6 @@ import type { PDFProviderId } from '@/lib/pdf/types';
 import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
 import type { ProviderId } from '@/lib/ai/providers';
-import { MONO_LOGO_PROVIDERS } from '@/lib/ai/providers';
 import type { SettingsSection } from '@/lib/types/settings';
 import { MediaPopover } from '@/components/generation/media-popover';
 import { publicAssetUrl } from '@/lib/utils/public-asset';
@@ -85,9 +84,7 @@ export function GenerationToolbar({
     ? Object.entries(providersConfig)
         .filter(
           ([, config]) =>
-            (config.requiresApiKey
-              ? config.apiKey || config.isServerConfigured
-              : config.isServerConfigured || config.baseUrl) &&
+            (!config.requiresApiKey || config.apiKey || config.isServerConfigured) &&
             config.models.length >= 1 &&
             (config.baseUrl || config.defaultBaseUrl || config.serverBaseUrl),
         )
@@ -482,10 +479,7 @@ function ModelSelectorPopover({
                 <img
                   src={publicAssetUrl(currentProviderConfig.icon)}
                   alt={currentProviderConfig.name}
-                  className={cn(
-                    'size-4 rounded-sm',
-                    MONO_LOGO_PROVIDERS.has(currentProviderId) && 'dark:invert',
-                  )}
+                  className="size-4 rounded-sm"
                 />
               ) : (
                 <Bot className="size-3.5 text-muted-foreground" />
@@ -524,10 +518,7 @@ function ModelSelectorPopover({
                     <img
                       src={publicAssetUrl(provider.icon)}
                       alt={provider.name}
-                      className={cn(
-                        'size-5 rounded-sm shrink-0',
-                        MONO_LOGO_PROVIDERS.has(provider.id) && 'dark:invert',
-                      )}
+                      className="size-5 rounded-sm shrink-0"
                     />
                   ) : (
                     <Bot className="size-5 text-muted-foreground shrink-0" />
@@ -564,10 +555,7 @@ function ModelSelectorPopover({
                 <img
                   src={publicAssetUrl(activeProvider.icon)}
                   alt={activeProvider.name}
-                  className={cn(
-                    'size-4 rounded-sm',
-                    MONO_LOGO_PROVIDERS.has(activeProvider.id) && 'dark:invert',
-                  )}
+                  className="size-4 rounded-sm"
                 />
               ) : (
                 <Bot className="size-4 text-muted-foreground" />

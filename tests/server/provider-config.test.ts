@@ -5,6 +5,69 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // the mock scoped to what provider-config actually reads.
 let yamlOverride: string | null = null;
 
+const PROVIDER_ENV_KEYS = [
+  'OPENAI_API_KEY',
+  'OPENAI_BASE_URL',
+  'OPENAI_MODELS',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_MODELS',
+  'GOOGLE_API_KEY',
+  'GOOGLE_BASE_URL',
+  'GOOGLE_MODELS',
+  'DEEPSEEK_API_KEY',
+  'DEEPSEEK_BASE_URL',
+  'DEEPSEEK_MODELS',
+  'QWEN_API_KEY',
+  'QWEN_BASE_URL',
+  'QWEN_MODELS',
+  'KIMI_API_KEY',
+  'KIMI_BASE_URL',
+  'KIMI_MODELS',
+  'MINIMAX_API_KEY',
+  'MINIMAX_BASE_URL',
+  'MINIMAX_MODELS',
+  'GLM_API_KEY',
+  'GLM_BASE_URL',
+  'GLM_MODELS',
+  'SILICONFLOW_API_KEY',
+  'SILICONFLOW_BASE_URL',
+  'SILICONFLOW_MODELS',
+  'DOUBAO_API_KEY',
+  'DOUBAO_BASE_URL',
+  'DOUBAO_MODELS',
+  'GROK_API_KEY',
+  'GROK_BASE_URL',
+  'GROK_MODELS',
+  'OLLAMA_BASE_URL',
+  'OLLAMA_MODELS',
+  'TTS_OPENAI_API_KEY',
+  'TTS_AZURE_API_KEY',
+  'TTS_GLM_API_KEY',
+  'TTS_QWEN_API_KEY',
+  'TTS_MINIMAX_API_KEY',
+  'TTS_DOUBAO_API_KEY',
+  'TTS_ELEVENLABS_API_KEY',
+  'TTS_TENCENT_SECRET_ID',
+  'TTS_TENCENT_SECRET_KEY',
+  'ASR_OPENAI_API_KEY',
+  'ASR_QWEN_API_KEY',
+  'PDF_MINERU_BASE_URL',
+  'PDF_MINERU_CLOUD_BASE_URL',
+  'IMAGE_SEEDREAM_API_KEY',
+  'IMAGE_QWEN_IMAGE_API_KEY',
+  'IMAGE_NANO_BANANA_API_KEY',
+  'IMAGE_MINIMAX_API_KEY',
+  'IMAGE_GROK_API_KEY',
+  'VIDEO_SEEDANCE_API_KEY',
+  'VIDEO_KLING_API_KEY',
+  'VIDEO_VEO_API_KEY',
+  'VIDEO_SORA_API_KEY',
+  'VIDEO_MINIMAX_API_KEY',
+  'VIDEO_GROK_API_KEY',
+  'TAVILY_API_KEY',
+];
+
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
   const isYaml = (p: unknown) => typeof p === 'string' && p.endsWith('server-providers.yml');
@@ -28,6 +91,9 @@ describe('provider-config', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllEnvs();
+    for (const key of PROVIDER_ENV_KEYS) {
+      vi.stubEnv(key, undefined);
+    }
     yamlOverride = null;
   });
 

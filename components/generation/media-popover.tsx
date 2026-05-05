@@ -48,6 +48,7 @@ interface MediaPopoverProps {
 // ─── Provider icon maps ───
 const IMAGE_PROVIDER_ICONS: Record<string, string> = {
   seedream: '/logos/doubao.svg',
+  'openai-image': '/logos/openai.svg',
   'qwen-image': '/logos/bailian.svg',
   'nano-banana': '/logos/gemini.svg',
   'minimax-image': '/logos/minimax.svg',
@@ -93,6 +94,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'glm-tts': t('settings.providerGLMTTS'),
     'qwen-tts': t('settings.providerQwenTTS'),
     'tencent-tts': t('settings.providerTencentTTS'),
+    'voxcpm-tts': t('settings.providerVoxCPMTTS'),
     'doubao-tts': t('settings.providerDoubaoTTS'),
     'minimax-tts': t('settings.providerMiniMaxTTS'),
     'elevenlabs-tts': t('settings.providerElevenLabsTTS'),

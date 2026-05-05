@@ -25,8 +25,8 @@ import type {
 import type { SpeechAction } from '@/lib/types/action';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
-import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
 import type { ViewportPreset } from '@/lib/config/viewport';
+import { resolveModelFromRequest } from '@/lib/server/resolve-model';
 
 const log = createLogger('Scene Actions API');
 
@@ -85,8 +85,13 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'stageId is required');
     }
 
-    // ── Model resolution from request headers ──
-    const { model: languageModel, modelInfo, modelString } = await resolveModelFromHeaders(req);
+    // ── Model resolution from request headers/body ──
+    const {
+      model: languageModel,
+      modelInfo,
+      modelString,
+      thinkingConfig,
+    } = await resolveModelFromRequest(req, body);
     outlineTitle = outline?.title;
     resolvedModelString = modelString;
 
@@ -113,6 +118,8 @@ export async function POST(req: NextRequest) {
             maxOutputTokens: modelInfo?.outputWindow,
           },
           'scene-actions',
+          undefined,
+          thinkingConfig,
         );
         return result.text;
       }
@@ -124,6 +131,8 @@ export async function POST(req: NextRequest) {
           maxOutputTokens: modelInfo?.outputWindow,
         },
         'scene-actions',
+        undefined,
+        thinkingConfig,
       );
       return result.text;
     };

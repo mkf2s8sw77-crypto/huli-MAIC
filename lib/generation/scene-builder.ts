@@ -88,6 +88,13 @@ export async function buildSceneFromOutline(
 ): Promise<Scene | null> {
   // Apply type fallbacks
   outline = applyOutlineFallbacks(outline, !!languageModel);
+  const effectiveViewport =
+    viewport ||
+    ({
+      viewportPreset: '16:9',
+      viewportSize: DEFAULT_VIEWPORT_SIZE,
+      viewportRatio: getViewportRatio('16:9'),
+    } as const);
 
   const langText = buildLanguageText(languageDirective, outline.languageNote);
 
@@ -102,14 +109,21 @@ export async function buildSceneFromOutline(
   log.debug(
     `imageMapping available: ${imageMapping ? Object.keys(imageMapping).length + ' keys' : 'undefined'}`,
   );
-  const content = await generateSceneContent(outline, aiCall, {
+  const contentOutline =
+    languageDirective
+      ? ({
+          ...outline,
+          __languageDirective: languageDirective,
+        } as SceneOutline)
+      : outline;
+  const content = await generateSceneContent(contentOutline, aiCall, {
     assignedImages,
     imageMapping,
     languageModel,
     visionEnabled,
     agents,
-    viewport,
-    languageDirective: langText,
+    viewport: effectiveViewport,
+    languageDirective: languageDirective || langText,
   });
   if (!content) {
     log.error(`Failed to generate content for: ${outline.title}`);
@@ -123,11 +137,12 @@ export async function buildSceneFromOutline(
     ctx,
     agents,
     userProfile,
+    languageDirective: langText,
   });
   log.debug(`Generated ${actions.length} actions for: ${outline.title}`);
 
   // Build complete Scene object
-  return buildCompleteScene(outline, content, actions, stageId, viewport);
+  return buildCompleteScene(outline, content, actions, stageId, effectiveViewport);
 }
 
 /**

@@ -151,6 +151,11 @@ function GenerationPreviewContent() {
     };
   };
 
+  const withThinkingConfig = <T extends Record<string, unknown>>(body: T) => {
+    const { thinkingConfig } = getCurrentModelConfig();
+    return thinkingConfig ? { ...body, thinkingConfig } : body;
+  };
+
   // Auto-start generation when session is loaded
   useEffect(() => {
     if (session && !hasStartedRef.current) {
@@ -714,17 +719,19 @@ function GenerationPreviewContent() {
       const actionsResp = await fetch('/api/generate/scene-actions', {
         method: 'POST',
         headers: getApiHeaders(),
-        body: JSON.stringify({
-          outline: contentData.effectiveOutline || firstOutline,
-          allOutlines: outlines,
-          content: contentData.content,
-          stageId: stage.id,
-          stageInfo,
-          agents,
-          previousSpeeches: [],
-          userProfile,
-          languageDirective,
-        }),
+        body: JSON.stringify(
+          withThinkingConfig({
+            outline: contentData.effectiveOutline || firstOutline,
+            allOutlines: outlines,
+            content: contentData.content,
+            stageId: stage.id,
+            stageInfo,
+            agents,
+            previousSpeeches: [],
+            userProfile,
+            languageDirective,
+          }),
+        ),
         signal,
       });
 

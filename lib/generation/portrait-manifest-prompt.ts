@@ -81,8 +81,11 @@ Choose based on the emotional tone of the content.`;
 export function buildPortraitManifestUserPrompt(
   outline: SceneOutline,
   assignedImages?: PdfImage[],
+  languageDirective?: string,
 ): string {
   const language = resolveOutlineLanguage(outline, outline.language).language;
+  const inheritedDirective = (outline as SceneOutline & { __languageDirective?: string })
+    .__languageDirective;
   const keyPointsList = (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n');
 
   const imageSection =
@@ -100,6 +103,9 @@ Key Points:
 ${keyPointsList || '(none)'}
 
 ${imageSection}
+
+Language Directive:
+${languageDirective || inheritedDirective || buildLanguageGuardrail(language)}
 
 Output the JSON manifest for this portrait slide.`;
 }

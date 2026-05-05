@@ -154,6 +154,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'glm-tts': t('settings.providerGLMTTS'),
     'qwen-tts': t('settings.providerQwenTTS'),
     'tencent-tts': t('settings.providerTencentTTS'),
+    'voxcpm-tts': t('settings.providerVoxCPMTTS'),
     'doubao-tts': t('settings.providerDoubaoTTS'),
     'minimax-tts': t('settings.providerMiniMaxTTS'),
     'elevenlabs-tts': t('settings.providerElevenLabsTTS'),
@@ -178,6 +179,7 @@ function getASRProviderName(providerId: ASRProviderId, t: (key: string) => strin
 // ─── Image/Video provider name helpers ───
 const IMAGE_PROVIDER_NAMES: Record<ImageProviderId, string> = {
   seedream: 'providerSeedream',
+  'openai-image': 'providerOpenAIImage',
   'qwen-image': 'providerQwenImage',
   'nano-banana': 'providerNanoBanana',
   'minimax-image': 'providerMiniMaxImage',
@@ -186,6 +188,7 @@ const IMAGE_PROVIDER_NAMES: Record<ImageProviderId, string> = {
 
 const IMAGE_PROVIDER_ICONS: Record<ImageProviderId, string> = {
   seedream: '/logos/doubao.svg',
+  'openai-image': '/logos/openai.svg',
   'qwen-image': '/logos/bailian.svg',
   'nano-banana': '/logos/gemini.svg',
   'minimax-image': '/logos/minimax.svg',

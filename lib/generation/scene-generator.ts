@@ -25,6 +25,7 @@ import type { StageStore } from '@/lib/api/stage-api';
 import { createStageAPI } from '@/lib/api/stage-api';
 import { generatePBLContent } from '@/lib/pbl/generate-pbl';
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompts';
+import { DEFAULT_LANGUAGE_DIRECTIVE } from './outline-generator';
 import { postProcessInteractiveHtml } from './interactive-post-processor';
 import { parseActionsFromStructuredOutput } from './action-parser';
 import { parseJsonResponse } from './json-repair';
@@ -54,6 +55,7 @@ import type {
   GenerationResult,
   GenerationCallbacks,
 } from './pipeline-types';
+import type { ThinkingConfig } from '@/lib/types/provider';
 import { createLogger } from '@/lib/logger';
 import {
   DEFAULT_VIEWPORT_PRESET,
@@ -90,6 +92,7 @@ export interface SceneContentOptions {
     viewportSize?: number;
     viewportRatio?: number;
   };
+  thinkingConfig?: ThinkingConfig;
 }
 
 export interface SceneActionsOptions {
@@ -312,6 +315,7 @@ export async function generateSceneContent(
     agents,
     languageDirective,
     viewport,
+    thinkingConfig,
   } = options;
 
   // Unified path for interactive scenes (both normal and ultra mode)
@@ -338,7 +342,7 @@ export async function generateSceneContent(
     return generateWidgetContent(
       outline,
       aiCall,
-      resolveOutlineLanguage(outline, outline.language).language,
+      buildLanguageText(languageDirective, outline.languageNote) || DEFAULT_LANGUAGE_DIRECTIVE,
     );
   }
 
@@ -358,7 +362,7 @@ export async function generateSceneContent(
     case 'quiz':
       return generateQuizContent(outline, aiCall, languageDirective);
     case 'pbl':
-      return generatePBLSceneContent(outline, languageModel, languageDirective);
+      return generatePBLSceneContent(outline, languageModel, languageDirective, thinkingConfig);
     default:
       return null;
   }
@@ -835,11 +839,18 @@ async function generatePortraitSlide(
   _generatedMediaMapping: ImageMapping | undefined,
   canvasWidth: number,
   canvasHeight: number,
+  languageDirective?: string,
 ): Promise<GeneratedSlideContent | null> {
   try {
     // Step 1: AI → manifest
     const system = buildPortraitManifestSystemPrompt();
-    const user = buildPortraitManifestUserPrompt(outline, assignedImages);
+    const portraitLanguageDirective =
+      languageDirective || buildLanguageText(undefined, outline.languageNote) || DEFAULT_LANGUAGE_DIRECTIVE;
+    const user = buildPortraitManifestUserPrompt(
+      outline,
+      assignedImages,
+      portraitLanguageDirective,
+    );
     const response = await aiCall(system, user);
     const manifest = parseJsonResponse<PortraitContentManifest>(response);
 
@@ -977,14 +988,20 @@ async function generateSlideContent(
     }
   }
 
+  const generatedImageEntries = outline.mediaGenerations?.filter((mg) => mg.type === 'image') ?? [];
+  const generatedVideoEntries = outline.mediaGenerations?.filter((mg) => mg.type === 'video') ?? [];
+  const hasAssignedImages = (assignedImages?.length ?? 0) > 0;
+  const generatedImageEnabled = generatedImageEntries.length > 0;
+  const generatedVideoEnabled = generatedVideoEntries.length > 0;
+  const imageElementEnabled = hasAssignedImages || generatedImageEnabled;
+  const mediaElementEnabled = imageElementEnabled || generatedVideoEnabled;
+
   // Add generated media placeholders info (images + videos)
   if (!isPortrait && outline.mediaGenerations && outline.mediaGenerations.length > 0) {
-    const genImgDescs = outline.mediaGenerations
-      .filter((mg) => mg.type === 'image')
+    const genImgDescs = generatedImageEntries
       .map((mg) => `- ${mg.elementId}: "${mg.prompt}" (aspect ratio: ${mg.aspectRatio || '16:9'})`)
       .join('\n');
-    const genVidDescs = outline.mediaGenerations
-      .filter((mg) => mg.type === 'video')
+    const genVidDescs = generatedVideoEntries
       .map((mg) => `- ${mg.elementId}: "${mg.prompt}" (aspect ratio: ${mg.aspectRatio || '16:9'})`)
       .join('\n');
 
@@ -1022,6 +1039,7 @@ async function generateSlideContent(
       generatedMediaMapping,
       canvasWidth,
       canvasHeight,
+      languageDirective,
     );
     if (portraitResult) {
       log.info(`Portrait template engine succeeded for "${outline.title}"`);
@@ -1046,6 +1064,10 @@ async function generateSlideContent(
     teacherContext,
     languageGuardrail: buildLanguageGuardrail(lang),
     languageDirective: buildLanguageText(languageDirective, outline.languageNote),
+    imageElementEnabled,
+    generatedImageEnabled,
+    generatedVideoEnabled,
+    mediaElementEnabled,
   });
 
   if (!prompts) {
@@ -1263,6 +1285,7 @@ async function generatePBLSceneContent(
   outline: SceneOutline,
   languageModel?: LanguageModel,
   languageDirective?: string,
+  thinkingConfig?: ThinkingConfig,
 ): Promise<GeneratedPBLContent | null> {
   if (!languageModel) {
     log.error('LanguageModel required for PBL generation');
@@ -1286,12 +1309,13 @@ async function generatePBLSceneContent(
         issueCount: pblConfig.issueCount,
         languageDirective:
           buildLanguageText(languageDirective, outline.languageNote) ||
-          'Teach in the language that matches the user requirement.',
+          DEFAULT_LANGUAGE_DIRECTIVE,
       },
       languageModel,
       {
         onProgress: (msg) => log.info(`${msg}`),
       },
+      thinkingConfig,
     );
     log.info(
       `PBL generated: ${projectConfig.agents.length} agents, ${projectConfig.issueboard.issues.length} issues`,
@@ -1349,7 +1373,7 @@ function extractHtml(response: string): string | null {
 async function generateWidgetContent(
   outline: SceneOutline,
   aiCall: AICallFn,
-  language: 'zh-CN' | 'en-US',
+  languageDirective?: string,
 ): Promise<GeneratedInteractiveContent | null> {
   const widgetType = outline.widgetType;
   const widgetOutline = outline.widgetOutline;
@@ -1372,7 +1396,7 @@ async function generateWidgetContent(
         keyPoints: (outline.keyPoints || []).join('\n'),
         variables: widgetOutline.keyVariables?.join(', ') || '',
         designIdea: '',
-        language,
+        languageDirective: languageDirective || '',
       };
       break;
 
@@ -1383,7 +1407,7 @@ async function generateWidgetContent(
         diagramType: widgetOutline.diagramType || 'flowchart',
         description: outline.description,
         keyPoints: (outline.keyPoints || []).join('\n'),
-        language,
+        languageDirective: languageDirective || '',
       };
       break;
 
@@ -1397,7 +1421,7 @@ async function generateWidgetContent(
         starterCode: '',
         testCases: '', // AI generates appropriate test cases based on challenge
         hints: '', // AI generates progressive hints based on challenge
-        language,
+        languageDirective: languageDirective || '',
       };
       break;
 
@@ -1409,7 +1433,7 @@ async function generateWidgetContent(
         description: outline.description,
         keyPoints: (outline.keyPoints || []).join('\n'),
         scoring: { correctPoints: 10, speedBonus: 5 },
-        language,
+        languageDirective: languageDirective || '',
       };
       break;
 
@@ -1422,7 +1446,7 @@ async function generateWidgetContent(
         keyPoints: (outline.keyPoints || []).join('\n'),
         objects: widgetOutline.objects || [],
         interactions: widgetOutline.interactions || [],
-        language,
+        languageDirective: languageDirective || '',
       };
       break;
 
@@ -1455,7 +1479,7 @@ async function generateWidgetContent(
     outline,
     widgetConfig,
     aiCall,
-    language,
+    languageDirective,
   );
   log.info(
     `[Ultra Mode] Generated ${teacherActions?.length || 0} teacher actions for "${outline.title}" (${widgetType})`,
@@ -1498,14 +1522,14 @@ async function generateWidgetTeacherActions(
   outline: SceneOutline,
   widgetConfig: WidgetConfig | undefined,
   aiCall: AICallFn,
-  language: 'zh-CN' | 'en-US',
+  languageDirective?: string,
 ): Promise<TeacherAction[] | undefined> {
   const prompts = buildPrompt(PROMPT_IDS.WIDGET_TEACHER_ACTIONS, {
     widgetType,
     description: outline.description,
     keyPoints: (outline.keyPoints || []).join('\n'),
     widgetConfig: JSON.stringify(widgetConfig || {}),
-    language,
+    languageDirective: languageDirective || '',
   });
 
   if (!prompts) return undefined;

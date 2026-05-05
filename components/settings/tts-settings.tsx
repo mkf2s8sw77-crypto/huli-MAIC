@@ -281,6 +281,7 @@ export function TTSSettings({ selectedProviderId }: TTSSettingsProps) {
               switch (selectedProviderId) {
                 case 'openai-tts':
                 case 'glm-tts':
+                case 'voxcpm-tts':
                   endpointPath = '/audio/speech';
                   break;
                 case 'azure-tts':

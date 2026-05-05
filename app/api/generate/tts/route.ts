@@ -20,6 +20,7 @@ import type { TTSProviderId } from '@/lib/audio/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
+import { VOXCPM_AUTO_VOICE_ID, VOXCPM_TTS_PROVIDER_ID } from '@/lib/audio/voxcpm';
 
 const log = createLogger('TTS API');
 
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
   let audioId: string | undefined;
   try {
     const body = await req.json();
-    const { text, ttsModelId, ttsSpeed, ttsApiKey, ttsBaseUrl } = body as {
+    const { text, ttsModelId, ttsSpeed, ttsApiKey, ttsBaseUrl, ttsProviderOptions } = body as {
       text: string;
       audioId: string;
       ttsProviderId: TTSProviderId;
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
       ttsSpeed?: number;
       ttsApiKey?: string;
       ttsBaseUrl?: string;
+      ttsProviderOptions?: Record<string, unknown>;
     };
     ttsProviderId = body.ttsProviderId;
     ttsVoice = body.ttsVoice;
@@ -60,8 +62,22 @@ export async function POST(req: NextRequest) {
     }
 
     const isServerManagedProvider = ttsProviderId === 'tencent-tts';
+    const voxcpmVoicePrompt =
+      typeof ttsProviderOptions?.voicePrompt === 'string' ? ttsProviderOptions.voicePrompt : '';
+    if (
+      ttsProviderId === VOXCPM_TTS_PROVIDER_ID &&
+      ttsVoice === VOXCPM_AUTO_VOICE_ID &&
+      !voxcpmVoicePrompt.trim()
+    ) {
+      return apiError(
+        'VOXCPM_AUTO_VOICE_REQUIRES_CONTEXT',
+        400,
+        'VoxCPM Auto Voice requires agent context',
+      );
+    }
+
     const clientBaseUrl = isServerManagedProvider ? undefined : ttsBaseUrl || undefined;
-    if (clientBaseUrl && process.env.NODE_ENV === 'production') {
+    if (clientBaseUrl) {
       const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
         return apiError('INVALID_URL', 403, ssrfError);
@@ -98,6 +114,7 @@ export async function POST(req: NextRequest) {
       secretId,
       secretKey,
       region,
+      providerOptions: ttsProviderOptions,
     };
 
     log.info(

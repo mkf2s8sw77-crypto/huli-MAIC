@@ -9,6 +9,7 @@
 import type { Stage, Scene } from '../types/stage';
 import type { ChatSession } from '../types/chat';
 import { saveChatSessions, loadChatSessions } from './chat-storage';
+import { clearAllForScene } from '@/lib/quiz/persistence';
 import { createLogger } from '@/lib/logger';
 import { DEFAULT_VIEWPORT_PRESET, getViewportOption } from '@/lib/config/viewport';
 import { withBasePath } from '@/lib/utils/base-path';
@@ -30,6 +31,7 @@ export interface StageListItem {
   createdAt: number;
   updatedAt: number;
   firstSlideCanvas?: Record<string, unknown> | null;
+  interactiveMode?: boolean;
 }
 
 /**
@@ -117,6 +119,9 @@ export async function loadStageData(stageId: string): Promise<StageStoreData | n
  */
 export async function deleteStageData(stageId: string): Promise<void> {
   try {
+    const existing = await loadStageData(stageId);
+    const sceneIds = existing?.scenes.map((scene) => scene.id) || [];
+
     const res = await fetch(
       withBasePath(`/api/stages/${encodeURIComponent(stageId)}`),
       { method: 'DELETE' },
@@ -125,6 +130,10 @@ export async function deleteStageData(stageId: string): Promise<void> {
     if (!res.ok && res.status !== 404) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `HTTP ${res.status}`);
+    }
+
+    for (const sceneId of sceneIds) {
+      clearAllForScene(sceneId);
     }
 
     log.info(`Deleted stage: ${stageId}`);

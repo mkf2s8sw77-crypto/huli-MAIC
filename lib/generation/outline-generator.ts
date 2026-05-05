@@ -21,6 +21,9 @@ import { buildLanguageGuardrail, resolveRequirementLanguage } from './language-p
 
 const log = createLogger('Generation');
 
+export const DEFAULT_LANGUAGE_DIRECTIVE =
+  'Teach in the language that matches the user requirement.';
+
 /**
  * Build orientation-aware outline design rules for the outline generation prompt.
  * Portrait (3:4 / 9:16) produces finer-grained, more numerous scenes.
@@ -153,17 +156,8 @@ export async function generateSceneOutlinesFromRequirements(
 
   const imageEnabled = options?.imageGenerationEnabled ?? false;
   const videoEnabled = options?.videoGenerationEnabled ?? false;
-  let mediaGenerationPolicy = '';
-  if (!imageEnabled && !videoEnabled) {
-    mediaGenerationPolicy =
-      '**IMPORTANT: Do NOT include any mediaGenerations in the outlines. Both image and video generation are disabled.**';
-  } else if (!imageEnabled) {
-    mediaGenerationPolicy =
-      '**IMPORTANT: Do NOT include any image mediaGenerations (type: "image") in the outlines. Image generation is disabled. Video generation is allowed.**';
-  } else if (!videoEnabled) {
-    mediaGenerationPolicy =
-      '**IMPORTANT: Do NOT include any video mediaGenerations (type: "video") in the outlines. Video generation is disabled. Image generation is allowed.**';
-  }
+  const mediaEnabled = imageEnabled || videoEnabled;
+  const hasSourceImages = (pdfImages?.length ?? 0) > 0;
 
   const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
     requirement: requirements.requirement,
@@ -176,7 +170,10 @@ export async function generateSceneOutlinesFromRequirements(
         : 'None',
     availableImages: availableImagesText,
     userProfile: userProfileText,
-    mediaGenerationPolicy,
+    hasSourceImages,
+    imageEnabled,
+    videoEnabled,
+    mediaEnabled,
     researchContext:
       options?.researchContext || (resolvedLanguage === 'zh-CN' ? '无' : 'None'),
     teacherContext: options?.teacherContext || '',
@@ -204,19 +201,16 @@ export async function generateSceneOutlinesFromRequirements(
 
     let languageDirective: string;
     let rawOutlines: SceneOutline[];
+    const fallbackLanguageDirective =
+      resolvedLanguage === 'zh-CN'
+        ? '请使用与用户需求一致的语言授课。'
+        : DEFAULT_LANGUAGE_DIRECTIVE;
 
     if (Array.isArray(parsed)) {
-      languageDirective =
-        resolvedLanguage === 'zh-CN'
-          ? '请使用与用户需求一致的语言授课。'
-          : 'Teach in the language that matches the user requirement.';
+      languageDirective = fallbackLanguageDirective;
       rawOutlines = parsed;
     } else if (parsed && Array.isArray(parsed.outlines)) {
-      languageDirective =
-        parsed.languageDirective ||
-        (resolvedLanguage === 'zh-CN'
-          ? '请使用与用户需求一致的语言授课。'
-          : 'Teach in the language that matches the user requirement.');
+      languageDirective = parsed.languageDirective || fallbackLanguageDirective;
       rawOutlines = parsed.outlines;
     } else {
       return { success: false, error: 'Failed to parse scene outlines response' };

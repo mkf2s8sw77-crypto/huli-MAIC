@@ -22,6 +22,9 @@ export type PromptId =
   | 'widget-teacher-actions'
   | 'pbl-actions'
   | 'agent-system'
+  | 'agent-system-wb-teacher'
+  | 'agent-system-wb-assistant'
+  | 'agent-system-wb-student'
   | 'director'
   | 'pbl-design';
 
@@ -32,7 +35,14 @@ export type SnippetId =
   | 'json-output-rules'
   | 'element-types'
   | 'action-types'
-  | 'speech-guidelines';
+  | 'image-instructions'
+  | 'video-instructions'
+  | 'media-safety-guidelines'
+  | 'slide-image-instructions'
+  | 'slide-generated-image-instructions'
+  | 'slide-video-instructions'
+  | 'speech-guidelines'
+  | 'whiteboard-reference';
 
 /**
  * Loaded prompt template

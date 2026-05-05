@@ -54,6 +54,7 @@ export function Stage({
     setCurrentSceneId,
     generatingOutlines,
     stage,
+    outlines,
   } = useStageStore();
   const failedOutlines = useStageStore.use.failedOutlines();
 
@@ -658,25 +659,29 @@ export function Stage({
     }
   };
 
+  const isPendingScene = currentSceneId === PENDING_SCENE_ID;
+  const hasNextPending = generatingOutlines.length > 0;
+  const isCourseComplete =
+    outlines.length > 0 && scenes.length === outlines.length && generatingOutlines.length === 0;
+  const canAdvanceToPendingSlot = hasNextPending || isCourseComplete;
+
   // next scene (gated)
   const handleNextScene = () => {
     if (isPendingScene) return; // Already on pending, nowhere to go
     const currentIndex = scenes.findIndex((s) => s.id === currentSceneId);
     if (currentIndex < scenes.length - 1) {
       gatedSceneSwitch(scenes[currentIndex + 1].id);
-    } else if (hasNextPending) {
-      // On last real scene → advance to pending page
+    } else if (canAdvanceToPendingSlot) {
+      // On last real scene → advance to pending slot
       setCurrentSceneId(PENDING_SCENE_ID);
     }
   };
 
   // get scene information
-  const isPendingScene = currentSceneId === PENDING_SCENE_ID;
-  const hasNextPending = generatingOutlines.length > 0;
   const currentSceneIndex = isPendingScene
     ? scenes.length
     : scenes.findIndex((s) => s.id === currentSceneId);
-  const totalScenesCount = scenes.length + (hasNextPending ? 1 : 0);
+  const totalScenesCount = scenes.length + (canAdvanceToPendingSlot ? 1 : 0);
 
   // get action information
   const totalActions = currentScene?.actions?.length || 0;
@@ -721,10 +726,17 @@ export function Stage({
       onCollapseChange={setSidebarCollapsed}
       onSceneSelect={gatedSceneSwitch}
       onRetryOutline={onRetryOutline}
+      isCourseComplete={isCourseComplete}
     />
   );
 
-  const headerSlot = <Header currentSceneTitle={currentScene?.title || ''} />;
+  const headerSlot = (
+    <Header
+      currentSceneTitle={
+        currentScene?.title || (isCourseComplete && isPendingScene ? t('stage.courseComplete') : '')
+      }
+    />
+  );
 
   const canvasSlot = (
     <CanvasArea
@@ -753,6 +765,7 @@ export function Stage({
       onStopDiscussion={handleStopDiscussion}
       hideToolbar={mode === 'playback'}
       isPendingScene={isPendingScene}
+      isCourseComplete={isCourseComplete}
       isGenerationFailed={
         isPendingScene && failedOutlines.some((f) => f.id === generatingOutlines[0]?.id)
       }

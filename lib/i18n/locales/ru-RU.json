@@ -10,6 +10,9 @@
     "greetingWithName": "Привет, {{name}}"
   },
   "toolbar": {
+    "languageHint": "Курс будет создан на этом языке",
+    "viewportPreset": "Соотношение",
+    "viewportPresetHint": "Выберите соотношение сторон холста класса",
     "pdfParser": "Парсер",
     "pdfUpload": "Загрузить PDF",
     "removePdf": "Удалить файл",
@@ -36,6 +39,12 @@
     "ttsPreviewing": "Воспроизведение...",
     "interactiveModeHint": "Включить интерактивный режим для более практического контента",
     "interactiveModeLabel": "Интерактивный режим"
+  },
+  "viewport": {
+    "16:9": "Горизонтальный 16:9",
+    "4:3": "Горизонтальный 4:3",
+    "3:4": "Вертикальный 3:4",
+    "9:16": "Вертикальный 9:16"
   },
   "export": {
     "pptx": "Экспорт PPTX",
@@ -599,6 +608,7 @@
     "providerAzureTTS": "Azure TTS",
     "providerGLMTTS": "GLM TTS",
     "providerQwenTTS": "Qwen TTS (Alibaba Cloud Bailian)",
+    "providerTencentTTS": "Tencent Cloud TTS",
     "providerVoxCPMTTS": "VoxCPM2",
     "providerDoubaoTTS": "Doubao TTS 2.0 (Volcengine)",
     "providerElevenLabsTTS": "ElevenLabs TTS",

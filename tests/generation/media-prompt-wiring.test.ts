@@ -74,7 +74,13 @@ describe('media prompt condition wiring', () => {
       ],
     };
 
-    const result = await generateSceneContent(outline, aiCall);
+    const result = await generateSceneContent(outline, aiCall, {
+      viewport: {
+        viewportPreset: '16:9',
+        viewportSize: 1000,
+        viewportRatio: 9 / 16,
+      },
+    });
 
     expect(result).not.toBeNull();
     expect(capturedPrompt).toContain('VideoElement');

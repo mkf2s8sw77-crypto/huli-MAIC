@@ -10,6 +10,9 @@
     "greetingWithName": "مرحبًا، {{name}}"
   },
   "toolbar": {
+    "languageHint": "سيتم إنشاء الدورة بهذه اللغة",
+    "viewportPreset": "النسبة",
+    "viewportPresetHint": "اختر نسبة أبعاد لوحة الفصل",
     "pdfParser": "محلل PDF",
     "pdfUpload": "رفع PDF",
     "removePdf": "إزالة الملف",
@@ -36,6 +39,12 @@
     "ttsHint": "اختر صوتًا للمعلم الذكي",
     "ttsPreview": "معاينة",
     "ttsPreviewing": "جارٍ التشغيل..."
+  },
+  "viewport": {
+    "16:9": "أفقي 16:9",
+    "4:3": "أفقي 4:3",
+    "3:4": "عمودي 3:4",
+    "9:16": "عمودي 9:16"
   },
   "export": {
     "pptx": "تصدير PPTX",
@@ -599,6 +608,7 @@
     "providerAzureTTS": "Azure TTS",
     "providerGLMTTS": "GLM TTS",
     "providerQwenTTS": "Qwen TTS (سحابة علي بابا بايليان)",
+    "providerTencentTTS": "Tencent Cloud TTS",
     "providerVoxCPMTTS": "VoxCPM2",
     "providerDoubaoTTS": "Doubao TTS 2.0 (فولكينجين)",
     "providerElevenLabsTTS": "ElevenLabs TTS",

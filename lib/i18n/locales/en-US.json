@@ -610,8 +610,6 @@
     "providerQwenTTS": "Qwen TTS (Alibaba Cloud Bailian)",
     "providerTencentTTS": "Tencent Cloud TTS",
     "providerVoxCPMTTS": "VoxCPM2",
-    "providerTencentTTS": "Tencent Cloud TTS",
-    "providerVoxCPMTTS": "VoxCPM2",
     "providerDoubaoTTS": "Doubao TTS 2.0 (Volcengine)",
     "providerElevenLabsTTS": "ElevenLabs TTS",
     "providerMiniMaxTTS": "MiniMax TTS",

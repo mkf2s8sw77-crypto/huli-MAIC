@@ -10,6 +10,9 @@
     "greetingWithName": "嗨，{{name}}"
   },
   "toolbar": {
+    "languageHint": "課程將以此語言生成",
+    "viewportPreset": "比例",
+    "viewportPresetHint": "選擇課堂畫布比例",
     "pdfParser": "解析器",
     "pdfUpload": "上傳 PDF",
     "removePdf": "移除檔案",
@@ -36,6 +39,12 @@
     "ttsPreviewing": "播放中...",
     "interactiveModeHint": "開啟深度交互模式，生成更多互動內容",
     "interactiveModeLabel": "深度交互"
+  },
+  "viewport": {
+    "16:9": "橫版 16:9",
+    "4:3": "橫版 4:3",
+    "3:4": "豎版 3:4",
+    "9:16": "豎版 9:16"
   },
   "export": {
     "pptx": "匯出 PPTX",
@@ -580,6 +589,7 @@
     "providerAzureTTS": "Azure TTS",
     "providerGLMTTS": "GLM TTS",
     "providerQwenTTS": "Qwen TTS（阿里雲百煉）",
+    "providerTencentTTS": "騰訊雲 TTS",
     "providerDoubaoTTS": "豆包 TTS 2.0（火山引擎）",
     "providerElevenLabsTTS": "ElevenLabs TTS",
     "providerMiniMaxTTS": "MiniMax TTS",

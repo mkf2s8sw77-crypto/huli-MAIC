@@ -223,20 +223,10 @@ describe('scene-generator language directive threading (issue #472)', () => {
       const captured: string[] = [];
       const aiCall: AICallFn = async (_system, user) => {
         captured.push(user);
-        if (captured.length === 1) {
-          return JSON.stringify({
-            archetype: 'lead',
-            accentColor: '#1e40af',
-            title: 'Test Scene',
-            heroBlock: { body: '核心内容' },
-            supportingCards: [],
-            imageRole: 'skip',
-          });
-        }
-        if (captured.length === 2) {
-          return JSON.stringify({ elements: [], background: null, remark: '' });
-        }
-        return '[]';
+        // First call is content (expects JSON); second is actions (expects array)
+        return captured.length === 1
+          ? JSON.stringify({ elements: [], background: null, remark: '' })
+          : '[]';
       };
 
       await buildSceneFromOutline(
@@ -255,8 +245,9 @@ describe('scene-generator language directive threading (issue #472)', () => {
         DIRECTIVE,
       );
 
-      expect(captured.length).toBeGreaterThanOrEqual(2);
+      expect(captured).toHaveLength(2);
       for (const user of captured) {
+        expect(user).toContain(DIRECTIVE);
         expect(user).not.toContain('{{languageDirective}}');
       }
     });

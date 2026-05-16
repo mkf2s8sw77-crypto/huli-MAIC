@@ -162,6 +162,61 @@ export async function listStages(): Promise<StageListItem[]> {
   }
 }
 
+type ThumbnailMediaElement = {
+  type: string;
+  src?: string;
+  mediaRef?: string;
+  poster?: string;
+};
+
+type ThumbnailSlide = import('../types/slides').Slide;
+
+function isGeneratedMediaRef(value: unknown): value is string {
+  return typeof value === 'string' && /^gen_(img|vid)_[\w-]+$/i.test(value);
+}
+
+function isLegacySequentialVideoRef(value: unknown): value is string {
+  return typeof value === 'string' && /^gen_vid_\d+$/i.test(value);
+}
+
+function getThumbnailMediaRef(element: ThumbnailMediaElement): string | undefined {
+  if (element.type === 'image' && isGeneratedMediaRef(element.src)) {
+    return element.src;
+  }
+  if (element.type === 'video') {
+    if (isGeneratedMediaRef(element.mediaRef)) return element.mediaRef;
+    if (isGeneratedMediaRef(element.src)) return element.src;
+  }
+  return undefined;
+}
+
+function getMediaRecordElementId(recordId: string): string {
+  return recordId.includes(':') ? recordId.split(':').slice(1).join(':') : recordId;
+}
+
+function blobWithType(blob: Blob, mimeType: string): Blob {
+  return blob.type ? blob : new Blob([blob], { type: mimeType });
+}
+
+function revokeObjectUrl(url: string | undefined) {
+  if (url?.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export function revokeThumbnailSlideMediaUrls(slides: Record<string, ThumbnailSlide>) {
+  for (const slide of Object.values(slides)) {
+    for (const element of slide.elements as ThumbnailMediaElement[]) {
+      if (element.type === 'image' || element.type === 'video') {
+        revokeObjectUrl(element.src);
+      }
+      if (element.type === 'video') {
+        revokeObjectUrl(element.poster);
+      }
+    }
+  }
+}
+
 /**
  * Get first slide canvas for thumbnails.
  *

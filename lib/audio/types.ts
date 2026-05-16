@@ -84,11 +84,10 @@ export type BuiltInTTSProviderId =
   | 'qwen-tts'
   | 'tencent-tts'
   | 'voxcpm-tts'
-  | 'tencent-tts'
-  | 'voxcpm-tts'
   | 'doubao-tts'
   | 'minimax-tts'
   | 'elevenlabs-tts'
+  | 'lemonade-tts'
   | 'browser-native-tts';
 
 export type TTSProviderId = BuiltInTTSProviderId | `custom-tts-${string}`;
@@ -156,7 +155,11 @@ export interface TTSModelConfig {
  * Add new ASR providers here as union members.
  * Keep in sync with ASR_PROVIDERS registry in constants.ts
  */
-export type BuiltInASRProviderId = 'openai-whisper' | 'browser-native' | 'qwen-asr';
+export type BuiltInASRProviderId =
+  | 'openai-whisper'
+  | 'browser-native'
+  | 'qwen-asr'
+  | 'lemonade-asr';
 
 export type ASRProviderId = BuiltInASRProviderId | `custom-asr-${string}`;
 

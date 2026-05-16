@@ -55,6 +55,7 @@ const LLM_ENV_MAP: Record<string, string> = {
   XIAOMI: 'xiaomi',
   MIMO: 'xiaomi',
   OLLAMA: 'ollama',
+  LEMONADE: 'lemonade',
 };
 
 const TTS_ENV_MAP: Record<string, string> = {
@@ -66,6 +67,7 @@ const TTS_ENV_MAP: Record<string, string> = {
   TTS_VOXCPM: 'voxcpm-tts',
   TTS_DOUBAO: 'doubao-tts',
   TTS_ELEVENLABS: 'elevenlabs-tts',
+  TTS_LEMONADE: 'lemonade-tts',
 };
 
 function hasTencentTTSSecrets(): boolean {
@@ -81,6 +83,7 @@ function getTencentTTSEndpoint(): string | undefined {
 const ASR_ENV_MAP: Record<string, string> = {
   ASR_OPENAI: 'openai-whisper',
   ASR_QWEN: 'qwen-asr',
+  ASR_LEMONADE: 'lemonade-asr',
 };
 
 const PDF_ENV_MAP: Record<string, string> = {
@@ -96,6 +99,7 @@ const IMAGE_ENV_MAP: Record<string, string> = {
   IMAGE_NANO_BANANA: 'nano-banana',
   IMAGE_MINIMAX: 'minimax-image',
   IMAGE_GROK: 'grok-image',
+  IMAGE_LEMONADE: 'lemonade',
 };
 
 const VIDEO_ENV_MAP: Record<string, string> = {
@@ -105,11 +109,14 @@ const VIDEO_ENV_MAP: Record<string, string> = {
   VIDEO_SORA: 'sora',
   VIDEO_MINIMAX: 'minimax-video',
   VIDEO_GROK: 'grok-video',
+  VIDEO_HAPPYHORSE: 'happyhorse',
 };
 
 const WEB_SEARCH_ENV_MAP: Record<string, string> = {
   TAVILY: 'tavily',
   BOCHA: 'bocha',
+  BRAVE: 'brave',
+  BAIDU: 'baidu',
 };
 
 // ---------------------------------------------------------------------------
@@ -241,18 +248,22 @@ function applyOpenAIImageFallback(
 
 function buildConfig(yamlData: YamlData): ServerConfig {
   const image = applyOpenAIImageFallback(
-    loadEnvSection(IMAGE_ENV_MAP, yamlData.image),
+    loadEnvSection(IMAGE_ENV_MAP, yamlData.image, {
+      keylessProviders: new Set(['lemonade']),
+    }),
     yamlData.image,
   );
 
   return {
     providers: loadEnvSection(LLM_ENV_MAP, yamlData.providers, {
-      keylessProviders: new Set(['ollama']),
+      keylessProviders: new Set(['ollama', 'lemonade']),
     }),
     tts: loadEnvSection(TTS_ENV_MAP, yamlData.tts, {
-      keylessProviders: new Set(['voxcpm-tts']),
+      keylessProviders: new Set(['voxcpm-tts', 'lemonade-tts']),
     }),
-    asr: loadEnvSection(ASR_ENV_MAP, yamlData.asr),
+    asr: loadEnvSection(ASR_ENV_MAP, yamlData.asr, {
+      keylessProviders: new Set(['lemonade-asr']),
+    }),
     pdf: loadEnvSection(PDF_ENV_MAP, yamlData.pdf, { requiresBaseUrl: true }),
     image,
     video: loadEnvSection(VIDEO_ENV_MAP, yamlData.video),
@@ -518,5 +529,7 @@ export function resolveServerWebSearchProviderId(preferredProviderId?: string): 
     return preferredProviderId;
   }
   if (webSearch.tavily?.apiKey) return 'tavily';
+  if (webSearch.bocha?.apiKey) return 'bocha';
+  if (webSearch.baidu?.apiKey) return 'baidu';
   return Object.keys(webSearch)[0];
 }

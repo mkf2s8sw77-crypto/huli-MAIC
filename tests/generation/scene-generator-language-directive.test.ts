@@ -251,6 +251,7 @@ describe('scene-generator language directive threading (issue #472)', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         DIRECTIVE,
       );
 

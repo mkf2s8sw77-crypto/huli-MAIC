@@ -62,6 +62,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
   );
   const isServerConfigured = !!currentConfig?.isServerConfigured;
   const isReadOnly = MEDIA_SETTINGS_LOCKED;
+  const requiresApiKey = currentProvider?.requiresApiKey ?? true;
 
   const handleApiKeyChange = (apiKey: string) => {
     setImageProviderConfig(selectedProviderId, { apiKey });
@@ -182,7 +183,11 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
             variant="outline"
             size="sm"
             onClick={handleTest}
-            disabled={isReadOnly || testLoading || (!currentConfig?.apiKey && !isServerConfigured)}
+            disabled={
+              isReadOnly ||
+              testLoading ||
+              (requiresApiKey && !currentConfig?.apiKey && !isServerConfigured)
+            }
             className="gap-1.5"
           >
             {testLoading ? (

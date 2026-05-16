@@ -19,8 +19,8 @@ import { PDF_PROVIDERS } from '@/lib/pdf/constants';
 import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
 import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
 import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
-import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
+import type { BaiduSubSources, WebSearchProviderId } from '@/lib/web-search/types';
 import { createLogger } from '@/lib/logger';
 import { withBasePath } from '@/lib/utils/base-path';
 import { validateProvider, validateModel } from '@/lib/store/settings-validation';
@@ -118,10 +118,12 @@ export interface SettingsState {
       apiKey: string;
       baseUrl: string;
       enabled: boolean;
+      requiresApiKey?: boolean;
       isServerConfigured?: boolean;
       serverBaseUrl?: string;
     }
   >;
+  baiduSubSources: BaiduSubSources;
 
   // Image Generation settings
   imageProviderId: ImageProviderId;
@@ -156,6 +158,7 @@ export interface SettingsState {
   // Media generation toggles
   imageGenerationEnabled: boolean;
   videoGenerationEnabled: boolean;
+  reviewOutlineEnabled: boolean;
 
   // Web Search settings
   webSearchProviderId: WebSearchProviderId;
@@ -165,6 +168,7 @@ export interface SettingsState {
       apiKey: string;
       baseUrl: string;
       enabled: boolean;
+      requiresApiKey?: boolean;
       isServerConfigured?: boolean;
       serverBaseUrl?: string;
     }
@@ -303,6 +307,7 @@ export interface SettingsState {
   // Media generation toggle actions
   setImageGenerationEnabled: (enabled: boolean) => void;
   setVideoGenerationEnabled: (enabled: boolean) => void;
+  setReviewOutlineEnabled: (enabled: boolean) => void;
 
   // Web Search actions
   setWebSearchProvider: (providerId: WebSearchProviderId) => void;
@@ -310,6 +315,7 @@ export interface SettingsState {
     providerId: WebSearchProviderId,
     config: Partial<{ apiKey: string; baseUrl: string; enabled: boolean }>,
   ) => void;
+  setBaiduSubSources: (sources: Partial<BaiduSubSources>) => void;
 
   // Server provider actions
   fetchServerProviders: () => Promise<void>;
@@ -358,6 +364,12 @@ const getDefaultAudioConfig = () => ({
     'doubao-tts': { apiKey: '', baseUrl: '', enabled: false },
     'elevenlabs-tts': { apiKey: '', baseUrl: '', enabled: false },
     'minimax-tts': { apiKey: '', baseUrl: '', modelId: 'speech-2.8-hd', enabled: false },
+    'lemonade-tts': {
+      apiKey: '',
+      baseUrl: '',
+      modelId: 'kokoro-v1',
+      enabled: false,
+    },
     'browser-native-tts': { apiKey: '', baseUrl: '', enabled: true },
   } as Record<
     TTSProviderId,
@@ -367,6 +379,7 @@ const getDefaultAudioConfig = () => ({
     'openai-whisper': { apiKey: '', baseUrl: '', enabled: true },
     'browser-native': { apiKey: '', baseUrl: '', enabled: true },
     'qwen-asr': { apiKey: '', baseUrl: '', enabled: false },
+    'lemonade-asr': { apiKey: '', baseUrl: '', enabled: false },
   } as Record<ASRProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
@@ -391,6 +404,7 @@ const getDefaultImageConfig = () => ({
     'nano-banana': { apiKey: '', baseUrl: '', enabled: false },
     'minimax-image': { apiKey: '', baseUrl: '', enabled: false },
     'grok-image': { apiKey: '', baseUrl: '', enabled: false },
+    lemonade: { apiKey: '', baseUrl: '', enabled: false },
   } as Record<ImageProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
@@ -405,6 +419,7 @@ const getDefaultVideoConfig = () => ({
     sora: { apiKey: '', baseUrl: '', enabled: false },
     'minimax-video': { apiKey: '', baseUrl: '', enabled: false },
     'grok-video': { apiKey: '', baseUrl: '', enabled: false },
+    happyhorse: { apiKey: '', baseUrl: '', enabled: false },
   } as Record<VideoProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
@@ -412,9 +427,24 @@ const getDefaultVideoConfig = () => ({
 const getDefaultWebSearchConfig = () => ({
   webSearchProviderId: 'tavily' as WebSearchProviderId,
   webSearchProvidersConfig: {
-    tavily: { apiKey: '', baseUrl: '', enabled: true },
-    bocha: { apiKey: '', baseUrl: '', enabled: true },
-  } as Record<WebSearchProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
+    tavily: { apiKey: '', baseUrl: '', enabled: true, requiresApiKey: true },
+    bocha: { apiKey: '', baseUrl: '', enabled: true, requiresApiKey: true },
+    brave: {
+      apiKey: '',
+      baseUrl: WEB_SEARCH_PROVIDERS.brave.defaultBaseUrl || '',
+      enabled: true,
+      requiresApiKey: false,
+    },
+    baidu: { apiKey: '', baseUrl: '', enabled: true, requiresApiKey: true },
+  } as Record<
+    WebSearchProviderId,
+    { apiKey: string; baseUrl: string; enabled: boolean; requiresApiKey?: boolean }
+  >,
+  baiduSubSources: {
+    webSearch: true,
+    baike: true,
+    scholar: true,
+  } as BaiduSubSources,
 });
 
 /**
@@ -479,6 +509,7 @@ function ensureValidProviderSelections(state: Partial<SettingsState>): void {
   if (!hasProviderId(WEB_SEARCH_PROVIDERS, state.webSearchProviderId)) {
     state.webSearchProviderId = defaultWebSearchConfig.webSearchProviderId;
   }
+  ensureBaiduSubSources(state);
 
   if (!hasProviderId(IMAGE_PROVIDERS, state.imageProviderId)) {
     state.imageProviderId = defaultImageConfig.imageProviderId;
@@ -606,8 +637,23 @@ function ensureBuiltInWebSearchProviders(state: Partial<SettingsState>): void {
     const providerId = pid as WebSearchProviderId;
     if (!state.webSearchProvidersConfig![providerId]) {
       state.webSearchProvidersConfig![providerId] = defaultConfig[providerId];
+    } else {
+      state.webSearchProvidersConfig![providerId] = {
+        ...state.webSearchProvidersConfig![providerId],
+        requiresApiKey: WEB_SEARCH_PROVIDERS[providerId].requiresApiKey,
+      };
     }
   });
+}
+
+function ensureBaiduSubSources(state: Partial<SettingsState>): void {
+  const defaults = getDefaultWebSearchConfig().baiduSubSources;
+  const current = state.baiduSubSources;
+  state.baiduSubSources = {
+    webSearch: current?.webSearch ?? defaults.webSearch,
+    baike: current?.baike ?? defaults.baike,
+    scholar: current?.scholar ?? defaults.scholar,
+  };
 }
 
 // Migrate from old localStorage format
@@ -733,6 +779,7 @@ export const useSettingsStore = create<SettingsState>()(
         // Media generation toggles (off by default)
         imageGenerationEnabled: false,
         videoGenerationEnabled: false,
+        reviewOutlineEnabled: false,
 
         // Audio feature toggles (on by default)
         ttsEnabled: true,
@@ -875,7 +922,14 @@ export const useSettingsStore = create<SettingsState>()(
           })),
 
         // Image Generation actions
-        setImageProvider: (providerId) => set({ imageProviderId: providerId }),
+        setImageProvider: (providerId) =>
+          set(() => {
+            const models = IMAGE_PROVIDERS[providerId]?.models || [];
+            return {
+              imageProviderId: providerId,
+              imageModelId: models[0]?.id || '',
+            };
+          }),
         setImageModelId: (modelId) => set({ imageModelId: modelId }),
 
         setImageProviderConfig: (providerId, config) =>
@@ -921,6 +975,7 @@ export const useSettingsStore = create<SettingsState>()(
           }
           set({ videoGenerationEnabled: enabled });
         },
+        setReviewOutlineEnabled: (enabled) => set({ reviewOutlineEnabled: enabled }),
         setTTSEnabled: (enabled) => set({ ttsEnabled: enabled }),
         setASREnabled: (enabled) => set({ asrEnabled: enabled }),
 
@@ -1001,6 +1056,17 @@ export const useSettingsStore = create<SettingsState>()(
               },
             },
           })),
+        setBaiduSubSources: (sources) =>
+          set((state) => {
+            const next = {
+              ...state.baiduSubSources,
+              ...sources,
+            };
+            if (!next.webSearch && !next.baike && !next.scholar) {
+              return state;
+            }
+            return { baiduSubSources: next };
+          }),
 
         // Fetch server-configured providers and merge into local state
         fetchServerProviders: async () => {
@@ -1624,6 +1690,9 @@ export const useSettingsStore = create<SettingsState>()(
         if (state.videoGenerationEnabled === undefined) {
           state.videoGenerationEnabled = false;
         }
+        if (state.reviewOutlineEnabled === undefined) {
+          state.reviewOutlineEnabled = false;
+        }
 
         // Add default audio toggles if missing
         if ((state as Record<string, unknown>).ttsEnabled === undefined) {
@@ -1661,12 +1730,26 @@ export const useSettingsStore = create<SettingsState>()(
               apiKey: oldApiKey,
               baseUrl: '',
               enabled: true,
+              requiresApiKey: true,
               isServerConfigured: oldIsServerConfigured,
             },
             bocha: {
               apiKey: '',
               baseUrl: '',
               enabled: true,
+              requiresApiKey: true,
+            },
+            brave: {
+              apiKey: '',
+              baseUrl: WEB_SEARCH_PROVIDERS.brave.defaultBaseUrl || '',
+              enabled: true,
+              requiresApiKey: false,
+            },
+            baidu: {
+              apiKey: '',
+              baseUrl: '',
+              enabled: true,
+              requiresApiKey: true,
             },
           } as SettingsState['webSearchProvidersConfig'];
           delete stateRecord.webSearchApiKey;

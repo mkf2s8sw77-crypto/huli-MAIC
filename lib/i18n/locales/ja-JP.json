@@ -535,7 +535,11 @@
     "apiHost": "ベースURL",
     "baseUrlRegion": {
       "china": "中国",
-      "international": "国際"
+      "international": "国際",
+      "xiaomiPayg": "従量課金",
+      "xiaomiTokenPlanCN": "Token Plan 中国",
+      "xiaomiTokenPlanSGP": "Token Plan シンガポール",
+      "xiaomiTokenPlanEU": "Token Plan 欧州"
     },
     "requestUrl": "リクエストURL",
     "models": "モデル",
@@ -616,7 +620,6 @@
     "step3StartUsing": "保存後、選択したモデルが使用されます",
     "activeModel": "使用中のモデル",
     "activeModelDescription": "AI会話とコンテンツ生成に使用するモデルを選択",
-    "selectModel": "モデルを選択",
     "searchModels": "モデルを検索",
     "noModelsFound": "一致するモデルが見つかりません",
     "noConfiguredProviders": "設定済みのプロバイダーがありません",

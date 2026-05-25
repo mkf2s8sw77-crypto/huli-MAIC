@@ -535,7 +535,11 @@
     "apiHost": "العنوان الأساسي",
     "baseUrlRegion": {
       "china": "الصين",
-      "international": "دولي"
+      "international": "دولي",
+      "xiaomiPayg": "الدفع حسب الاستخدام",
+      "xiaomiTokenPlanCN": "Token Plan الصين",
+      "xiaomiTokenPlanSGP": "Token Plan سنغافورة",
+      "xiaomiTokenPlanEU": "Token Plan أوروبا"
     },
     "requestUrl": "عنوان الطلب",
     "models": "النماذج",
@@ -616,7 +620,6 @@
     "step3StartUsing": "بعد الحفظ، سيستخدم النظام النموذج المحدد",
     "activeModel": "النموذج النشط",
     "activeModelDescription": "اختر النموذج لمحادثات الذكاء الاصطناعي وتوليد المحتوى",
-    "selectModel": "اختر النموذج",
     "searchModels": "البحث في النماذج",
     "noModelsFound": "لم يتم العثور على نماذج مطابقة",
     "noConfiguredProviders": "لا يوجد مزوّدون مُكوّنون",

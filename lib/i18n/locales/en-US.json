@@ -535,7 +535,11 @@
     "apiHost": "Base URL",
     "baseUrlRegion": {
       "china": "China",
-      "international": "International"
+      "international": "International",
+      "xiaomiPayg": "Pay-as-you-go",
+      "xiaomiTokenPlanCN": "Token Plan CN",
+      "xiaomiTokenPlanSGP": "Token Plan SG",
+      "xiaomiTokenPlanEU": "Token Plan EU"
     },
     "requestUrl": "Request URL",
     "models": "Models",
@@ -616,7 +620,6 @@
     "step3StartUsing": "After saving, the system will use your selected model",
     "activeModel": "Active Model",
     "activeModelDescription": "Select the model for AI conversations and content generation",
-    "selectModel": "Select Model",
     "searchModels": "Search models",
     "noModelsFound": "No matching models found",
     "noConfiguredProviders": "No configured providers",

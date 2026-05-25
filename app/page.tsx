@@ -17,7 +17,6 @@ import {
   Sun,
   Moon,
   Monitor,
-  BotOff,
   ChevronUp,
   Upload,
   Atom,
@@ -38,6 +37,7 @@ import { nanoid } from 'nanoid';
 import { storePdfBlob } from '@/lib/utils/image-storage';
 import type { UserRequirements } from '@/lib/types/generation';
 import { useSettingsStore } from '@/lib/store/settings';
+import { hasUsableLLMProvider } from '@/lib/store/settings-validation';
 import { useUserProfileStore, AVATAR_OPTIONS } from '@/lib/store/user-profile';
 import {
   type StageListItem,
@@ -108,9 +108,11 @@ function HomePage() {
   const { cachedValue: cachedRequirement, updateCache: updateRequirementCache } =
     useDraftCache<string>({ key: 'requirementDraft' });
 
-  // Model setup state
-  const currentModelId = useSettingsStore((s) => s.modelId);
-  const needsSetup = !currentModelId;
+  // A usable LLM provider exists ⇒ a concrete model is always selected (#580
+  // invariant). Gate generation on this single condition (state A vs B)
+  // instead of inspecting modelId directly.
+  const providersConfig = useSettingsStore((s) => s.providersConfig);
+  const hasUsableProvider = hasUsableLLMProvider(providersConfig);
   const [recentOpen, setRecentOpen] = useState(true);
   const persistRecentOpen = (next: boolean) => {
     setRecentOpen(next);
@@ -295,48 +297,11 @@ function HomePage() {
     }
   };
 
-  const showSetupToast = (icon: React.ReactNode, title: string, desc: string) => {
-    toast.custom(
-      (id) => (
-        <div
-          className="w-[356px] rounded-xl border border-amber-200/60 dark:border-amber-800/40 bg-gradient-to-r from-amber-50 via-white to-amber-50 dark:from-amber-950/60 dark:via-slate-900 dark:to-amber-950/60 shadow-lg shadow-amber-500/8 dark:shadow-amber-900/20 p-4 flex items-start gap-3 cursor-pointer"
-          onClick={() => {
-            toast.dismiss(id);
-            setSettingsOpen(true);
-          }}
-        >
-          <div className="shrink-0 mt-0.5 size-9 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center ring-1 ring-amber-200/50 dark:ring-amber-800/30">
-            {icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 leading-tight">
-              {title}
-            </p>
-            <p className="text-xs text-amber-700/80 dark:text-amber-400/70 mt-0.5 leading-relaxed">
-              {desc}
-            </p>
-          </div>
-          <div className="shrink-0 mt-1 text-[10px] font-medium text-amber-500 dark:text-amber-500/70 tracking-wide">
-            <Settings className="size-3.5 animate-[spin_3s_linear_infinite]" />
-          </div>
-        </div>
-      ),
-      { duration: 4000 },
-    );
-  };
-
   const handleGenerate = async () => {
-    // Validate setup before proceeding
-    if (!currentModelId) {
-      showSetupToast(
-        <BotOff className="size-4.5 text-amber-600 dark:text-amber-400" />,
-        t('settings.modelNotConfigured'),
-        t('settings.setupNeeded'),
-      );
-      setSettingsOpen(true);
-      return;
-    }
-
+    // No model/provider guard here: generation is gated by `canGenerate`
+    // (requires a usable provider), and under the #580 invariant a usable
+    // provider always has a concrete model. State A (no usable provider)
+    // surfaces through the toolbar's single Configure-Provider affordance.
     if (!form.requirement.trim()) {
       setError(t('upload.requirementRequired'));
       return;
@@ -414,7 +379,7 @@ function HomePage() {
     return date.toLocaleDateString();
   };
 
-  const canGenerate = !!form.requirement.trim();
+  const canGenerate = !!form.requirement.trim() && hasUsableProvider;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -518,17 +483,6 @@ function HomePage() {
               >
                 <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" />
               </button>
-              {needsSetup && (
-                <>
-                  <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-                    <span className="animate-setup-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-violet-500" />
-                  </span>
-                  <span className="animate-setup-float absolute top-full mt-2 right-0 whitespace-nowrap text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/50 px-2 py-0.5 rounded-full shadow-sm pointer-events-none hidden sm:inline-flex">
-                    {t('settings.setupNeeded')}
-                  </span>
-                </>
-              )}
             </div>
           </>
         )}

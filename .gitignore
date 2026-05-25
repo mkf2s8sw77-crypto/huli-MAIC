@@ -84,3 +84,6 @@ tests/generation/*.eval.result.md
 # Eval results
 eval/whiteboard-layout/results/
 eval/outline-language/results/
+
+# e2e screenshot artifacts
+e2e/screenshots/

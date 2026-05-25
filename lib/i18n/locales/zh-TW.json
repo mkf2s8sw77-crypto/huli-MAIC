@@ -597,7 +597,6 @@
     "step3StartUsing": "儲存設定後，系統將使用你選擇的模型",
     "activeModel": "使用模型",
     "activeModelDescription": "選擇目前用於 AI 對話和內容生成的模型",
-    "selectModel": "選擇模型",
     "searchModels": "搜尋模型",
     "noModelsFound": "未找到符合的模型",
     "noConfiguredProviders": "暫無已設定的供應商",
@@ -952,7 +951,11 @@
     "asrResultPlaceholder": "錄音完成後將顯示辨識結果",
     "baseUrlRegion": {
       "china": "中國",
-      "international": "國際"
+      "international": "國際",
+      "xiaomiPayg": "按量付費",
+      "xiaomiTokenPlanCN": "Token Plan 中國",
+      "xiaomiTokenPlanSGP": "Token Plan 新加坡",
+      "xiaomiTokenPlanEU": "Token Plan 歐洲"
     },
     "browserTTSNoVoices": "目前瀏覽器沒有可用的 TTS 聲音",
     "browserTTSNotSupported": "瀏覽器不支援語音合成 API",

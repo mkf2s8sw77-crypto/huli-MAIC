@@ -535,7 +535,11 @@
     "apiHost": "Base URL",
     "baseUrlRegion": {
       "china": "国内站",
-      "international": "国际站"
+      "international": "国际站",
+      "xiaomiPayg": "按量付费",
+      "xiaomiTokenPlanCN": "Token Plan 中国",
+      "xiaomiTokenPlanSGP": "Token Plan 新加坡",
+      "xiaomiTokenPlanEU": "Token Plan 欧洲"
     },
     "requestUrl": "请求地址",
     "models": "模型",
@@ -616,7 +620,6 @@
     "step3StartUsing": "保存设置后，系统将使用您选择的模型",
     "activeModel": "使用模型",
     "activeModelDescription": "选择当前用于 AI 对话和内容生成的模型",
-    "selectModel": "选择模型",
     "searchModels": "搜索模型",
     "noModelsFound": "未找到匹配的模型",
     "noConfiguredProviders": "暂无已配置的提供方",

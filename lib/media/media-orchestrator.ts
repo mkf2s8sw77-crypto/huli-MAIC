@@ -112,10 +112,7 @@ async function generateSingleMedia(
     formData.append('elementId', req.elementId);
     formData.append('type', req.type);
     formData.append('prompt', req.prompt);
-    formData.append(
-      'params',
-      JSON.stringify({ aspectRatio: req.aspectRatio, style: req.style }),
-    );
+    formData.append('params', JSON.stringify({ aspectRatio: req.aspectRatio, style: req.style }));
     if (posterBlob) {
       formData.append('poster', posterBlob, `${req.elementId}_poster.png`);
     }
@@ -146,22 +143,19 @@ async function generateSingleMedia(
     useMediaGenerationStore.getState().markFailed(req.elementId, message, errorCode);
 
     if (errorCode) {
-      await fetch(
-        withBasePath(`/api/stages/${encodeURIComponent(stageId)}/media`),
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            elementId: req.elementId,
-            type: req.type,
-            mimeType: req.type === 'image' ? 'image/png' : 'video/mp4',
-            prompt: req.prompt,
-            params: { aspectRatio: req.aspectRatio, style: req.style },
-            error: message,
-            errorCode,
-          }),
-        },
-      ).catch(() => {});
+      await fetch(withBasePath(`/api/stages/${encodeURIComponent(stageId)}/media`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          elementId: req.elementId,
+          type: req.type,
+          mimeType: req.type === 'image' ? 'image/png' : 'video/mp4',
+          prompt: req.prompt,
+          params: { aspectRatio: req.aspectRatio, style: req.style },
+          error: message,
+          errorCode,
+        }),
+      }).catch(() => {});
     }
   }
 }
@@ -173,7 +167,7 @@ async function callImageApi(
   const settings = useSettingsStore.getState();
   const providerConfig = settings.imageProvidersConfig?.[settings.imageProviderId];
 
-  const response = await fetch('/api/generate/image', {
+  const response = await fetch(withBasePath('/api/generate/image'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -212,7 +206,7 @@ async function callVideoApi(
   const settings = useSettingsStore.getState();
   const providerConfig = settings.videoProvidersConfig?.[settings.videoProviderId];
 
-  const response = await fetch('/api/generate/video', {
+  const response = await fetch(withBasePath('/api/generate/video'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -248,7 +242,7 @@ async function fetchAsBlob(url: string): Promise<Blob> {
     return res.blob();
   }
   if (url.startsWith('http://') || url.startsWith('https://')) {
-    const res = await fetch('/api/proxy-media', {
+    const res = await fetch(withBasePath('/api/proxy-media'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),

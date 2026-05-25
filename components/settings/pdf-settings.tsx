@@ -11,6 +11,7 @@ import { PDF_PROVIDERS } from '@/lib/pdf/constants';
 import type { PDFProviderId } from '@/lib/pdf/types';
 import { CheckCircle2, Eye, EyeOff, Loader2, Zap, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { withBasePath } from '@/lib/utils/base-path';
 
 /**
  * Get display label for feature
@@ -67,7 +68,7 @@ export function PDFSettings({ selectedProviderId }: PDFSettingsProps) {
     setTestMessage('');
 
     try {
-      const response = await fetch('/api/verify-pdf-provider', {
+      const response = await fetch(withBasePath('/api/verify-pdf-provider'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

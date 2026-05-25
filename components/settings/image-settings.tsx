@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { ImageProviderId } from '@/lib/media/types';
 import { MEDIA_SETTINGS_LOCKED } from '@/lib/config/media-settings';
+import { withBasePath } from '@/lib/utils/base-path';
 
 interface ImageSettingsProps {
   selectedProviderId: ImageProviderId;
@@ -77,7 +78,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
     setTestStatus('idle');
     setTestMessage('');
     try {
-      const response = await fetch('/api/verify-image-provider', {
+      const response = await fetch(withBasePath('/api/verify-image-provider'), {
         method: 'POST',
         headers: {
           'x-image-provider': selectedProviderId,
@@ -355,7 +356,11 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
               <Button variant="outline" size="sm" onClick={() => setShowModelDialog(false)}>
                 {t('settings.cancelEdit')}
               </Button>
-              <Button size="sm" onClick={handleSaveModel} disabled={isReadOnly || !modelForm.id.trim()}>
+              <Button
+                size="sm"
+                onClick={handleSaveModel}
+                disabled={isReadOnly || !modelForm.id.trim()}
+              >
                 {t('settings.saveModel')}
               </Button>
             </div>

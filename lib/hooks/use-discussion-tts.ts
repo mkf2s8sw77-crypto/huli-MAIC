@@ -13,6 +13,7 @@ import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import type { TTSProviderId } from '@/lib/audio/types';
 import type { AudioIndicatorState } from '@/components/roundtable/audio-indicator';
 import { useI18n } from '@/lib/hooks/use-i18n';
+import { withBasePath } from '@/lib/utils/base-path';
 
 interface DiscussionTTSOptions {
   enabled: boolean;
@@ -165,7 +166,7 @@ export function useDiscussionTTS({ enabled, agents, onAudioStateChange }: Discus
               })),
             }
           : undefined;
-      const res = await fetch('/api/generate/tts', {
+      const res = await fetch(withBasePath('/api/generate/tts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

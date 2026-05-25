@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
+import { withBasePath } from '@/lib/utils/base-path';
 import { publicAssetUrl } from '@/lib/utils/public-asset';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import type { TTSProviderId } from '@/lib/audio/types';
@@ -155,7 +156,7 @@ function AgentVoicePill({
                 })),
               }
             : undefined;
-        const res = await fetch('/api/generate/tts', {
+        const res = await fetch(withBasePath('/api/generate/tts'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -436,7 +437,7 @@ function TeacherVoicePill({
                 })),
               }
             : undefined;
-        const res = await fetch('/api/generate/tts', {
+        const res = await fetch(withBasePath('/api/generate/tts'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -724,7 +725,9 @@ export function AgentBar() {
       {teacherAgent && (
         <div className="size-8 rounded-full overflow-hidden ring-2 ring-blue-400/40 dark:ring-blue-500/30 shrink-0">
           <img
-            src={publicAssetUrl(normalizeAgentAvatar(teacherAgent.avatar, { role: teacherAgent.role }))}
+            src={publicAssetUrl(
+              normalizeAgentAvatar(teacherAgent.avatar, { role: teacherAgent.role }),
+            )}
             alt={getAgentName(teacherAgent)}
             className="size-full object-cover"
           />

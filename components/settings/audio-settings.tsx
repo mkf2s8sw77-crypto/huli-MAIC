@@ -28,6 +28,7 @@ import azureVoicesData from '@/lib/audio/azure.json';
 import { createLogger } from '@/lib/logger';
 import { publicAssetUrl } from '@/lib/utils/public-asset';
 import { normalizeASRUploadAudio } from '@/lib/audio/wav-utils';
+import { withBasePath } from '@/lib/utils/base-path';
 
 const log = createLogger('AudioSettings');
 
@@ -345,7 +346,7 @@ export function AudioSettings({ onSave }: AudioSettingsProps = {}) {
                 formData.append('baseUrl', baseUrlValue);
               }
 
-              const response = await fetch('/api/transcription', {
+              const response = await fetch(withBasePath('/api/transcription'), {
                 method: 'POST',
                 body: formData,
               });

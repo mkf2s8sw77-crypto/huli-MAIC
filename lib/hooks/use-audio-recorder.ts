@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { ASR_PROVIDERS } from '@/lib/audio/constants';
 import { normalizeASRUploadAudio } from '@/lib/audio/wav-utils';
 import { createLogger } from '@/lib/logger';
+import { withBasePath } from '@/lib/utils/base-path';
 
 const log = createLogger('AudioRecorder');
 
@@ -74,7 +75,7 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
           formData.append('audio', audioBlob, 'recording.webm');
         }
 
-        const response = await fetch('/api/transcription', {
+        const response = await fetch(withBasePath('/api/transcription'), {
           method: 'POST',
           body: formData,
         });

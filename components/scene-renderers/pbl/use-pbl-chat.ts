@@ -9,6 +9,7 @@ import type { PBLProjectConfig, PBLChatMessage, PBLAgent, PBLIssue } from '@/lib
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { createLogger } from '@/lib/logger';
+import { withBasePath } from '@/lib/utils/base-path';
 
 const log = createLogger('PBLChat');
 
@@ -70,7 +71,7 @@ export function usePBLChat({ projectConfig, userRole, onConfigUpdate }: UsePBLCh
 
         const isJudgeAgent = currentIssue && targetAgent.name === currentIssue.judge_agent_name;
 
-        const response = await fetch('/api/pbl/chat', {
+        const response = await fetch(withBasePath('/api/pbl/chat'), {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -205,7 +206,7 @@ async function handleIssueComplete(
           .filter(Boolean)
           .join('\n');
 
-        const resp = await fetch('/api/pbl/chat', {
+        const resp = await fetch(withBasePath('/api/pbl/chat'), {
           method: 'POST',
           headers,
           body: JSON.stringify({

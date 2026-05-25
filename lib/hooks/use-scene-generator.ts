@@ -14,6 +14,7 @@ import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
 import { getVoxCPMProviderOptions } from '@/lib/audio/voxcpm-voices';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { createLogger } from '@/lib/logger';
+import { withBasePath } from '@/lib/utils/base-path';
 
 const log = createLogger('SceneGenerator');
 
@@ -86,7 +87,7 @@ async function fetchSceneContent(
   },
   signal?: AbortSignal,
 ): Promise<SceneContentResult> {
-  const response = await fetch('/api/generate/scene-content', {
+  const response = await fetch(withBasePath('/api/generate/scene-content'), {
     method: 'POST',
     headers: getApiHeaders(),
     body: JSON.stringify(withThinkingConfig(params)),
@@ -120,7 +121,7 @@ async function fetchSceneActions(
   },
   signal?: AbortSignal,
 ): Promise<SceneActionsResult> {
-  const response = await fetch('/api/generate/scene-actions', {
+  const response = await fetch(withBasePath('/api/generate/scene-actions'), {
     method: 'POST',
     headers: getApiHeaders(),
     body: JSON.stringify(withThinkingConfig(params)),
@@ -153,7 +154,7 @@ export async function generateAndStoreTTS(
           ...(await getVoxCPMProviderOptions(settings.ttsVoice, { role: 'teacher', language })),
         }
       : undefined;
-  const response = await fetch('/api/generate/tts', {
+  const response = await fetch(withBasePath('/api/generate/tts'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

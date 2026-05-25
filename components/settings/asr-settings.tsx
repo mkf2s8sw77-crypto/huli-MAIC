@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
 import { MEDIA_SETTINGS_LOCKED } from '@/lib/config/media-settings';
 import { normalizeASRUploadAudio } from '@/lib/audio/wav-utils';
+import { withBasePath } from '@/lib/utils/base-path';
 
 const log = createLogger('ASRSettings');
 
@@ -154,7 +155,7 @@ export function ASRSettings({ selectedProviderId }: ASRSettingsProps) {
                 '';
               if (baseUrlValue?.trim()) formData.append('baseUrl', baseUrlValue);
 
-              const response = await fetch('/api/transcription', {
+              const response = await fetch(withBasePath('/api/transcription'), {
                 method: 'POST',
                 body: formData,
               });

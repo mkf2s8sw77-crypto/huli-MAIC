@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { VideoProviderId } from '@/lib/media/types';
 import { MEDIA_SETTINGS_LOCKED } from '@/lib/config/media-settings';
+import { withBasePath } from '@/lib/utils/base-path';
 
 interface VideoSettingsProps {
   selectedProviderId: VideoProviderId;
@@ -75,7 +76,7 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
     setTestStatus('idle');
     setTestMessage('');
     try {
-      const response = await fetch('/api/verify-video-provider', {
+      const response = await fetch(withBasePath('/api/verify-video-provider'), {
         method: 'POST',
         headers: {
           'x-video-provider': selectedProviderId,
@@ -353,7 +354,11 @@ export function VideoSettings({ selectedProviderId }: VideoSettingsProps) {
               <Button variant="outline" size="sm" onClick={() => setShowModelDialog(false)}>
                 {t('settings.cancelEdit')}
               </Button>
-              <Button size="sm" onClick={handleSaveModel} disabled={isReadOnly || !modelForm.id.trim()}>
+              <Button
+                size="sm"
+                onClick={handleSaveModel}
+                disabled={isReadOnly || !modelForm.id.trim()}
+              >
                 {t('settings.saveModel')}
               </Button>
             </div>

@@ -33,6 +33,7 @@ import { AgentRevealModal } from '@/components/agent/agent-reveal-modal';
 import { ServerProvidersInit } from '@/components/server-providers-init';
 import { createLogger } from '@/lib/logger';
 import { navigateToAppHome } from '@/lib/utils/navigation';
+import { withBasePath } from '@/lib/utils/base-path';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
 import { GENERATED_AGENT_AVATARS } from '@/lib/utils/agent-avatar';
@@ -45,7 +46,10 @@ import {
 const log = createLogger('GenerationPreview');
 const OUTLINE_REVIEW_AUTO_CONTINUE_MS = 2500;
 
-const GENERATED_AGENT_AVATAR_DESCRIPTIONS: Record<(typeof GENERATED_AGENT_AVATARS)[number], string> = {
+const GENERATED_AGENT_AVATAR_DESCRIPTIONS: Record<
+  (typeof GENERATED_AGENT_AVATARS)[number],
+  string
+> = {
   '/avatars/teacher.png': 'Male teacher with glasses, holding a book, green background',
   '/avatars/teacher-2.png':
     'Female teacher with long dark hair, blue traditional outfit, gentle expression',
@@ -309,7 +313,7 @@ function GenerationPreviewContent() {
           parseFormData.append('baseUrl', currentSession.pdfProviderConfig.baseUrl);
         }
 
-        const parseResponse = await fetch('/api/parse-pdf', {
+        const parseResponse = await fetch(withBasePath('/api/parse-pdf'), {
           method: 'POST',
           body: parseFormData,
           signal,
@@ -422,7 +426,7 @@ function GenerationPreviewContent() {
         const wsSettings = useSettingsStore.getState();
         const wsProviderId = wsSettings.webSearchProviderId;
         const wsConfig = wsSettings.webSearchProvidersConfig?.[wsProviderId];
-        const res = await fetch('/api/web-search', {
+        const res = await fetch(withBasePath('/api/web-search'), {
           method: 'POST',
           headers: getApiHeaders(),
           body: JSON.stringify(
@@ -509,7 +513,7 @@ function GenerationPreviewContent() {
           const collected: SceneOutline[] = [];
           let directive: string | undefined;
 
-          fetch('/api/generate/scene-outlines-stream', {
+          fetch(withBasePath('/api/generate/scene-outlines-stream'), {
             method: 'POST',
             headers: getApiHeaders(),
             body: JSON.stringify({
@@ -686,13 +690,16 @@ function GenerationPreviewContent() {
             );
           };
 
-          const agentResp = await fetch('/api/generate/agent-profiles', {
+          const agentResp = await fetch(withBasePath('/api/generate/agent-profiles'), {
             method: 'POST',
             headers: getApiHeaders(),
             body: JSON.stringify(
               withThinkingConfig({
                 stageInfo: { name: stage.name, description: stage.description },
-                sceneOutlines: outlines.map((o) => ({ title: o.title, description: o.description })),
+                sceneOutlines: outlines.map((o) => ({
+                  title: o.title,
+                  description: o.description,
+                })),
                 languageDirective,
                 availableAvatars: allAvatars.map((a) => a.path),
                 avatarDescriptions: allAvatars.map((a) => ({ path: a.path, desc: a.desc })),
@@ -807,7 +814,7 @@ function GenerationPreviewContent() {
       const firstOutline = outlines[0];
 
       // Step 2: Generate content (currentStepIndex is already 2)
-      const contentResp = await fetch('/api/generate/scene-content', {
+      const contentResp = await fetch(withBasePath('/api/generate/scene-content'), {
         method: 'POST',
         headers: getApiHeaders(),
         body: JSON.stringify({
@@ -837,7 +844,7 @@ function GenerationPreviewContent() {
       const actionsStepIdx = activeSteps.findIndex((s) => s.id === 'actions');
       setCurrentStepIndex(actionsStepIdx >= 0 ? actionsStepIdx : currentStepIndex + 1);
 
-      const actionsResp = await fetch('/api/generate/scene-actions', {
+      const actionsResp = await fetch(withBasePath('/api/generate/scene-actions'), {
         method: 'POST',
         headers: getApiHeaders(),
         body: JSON.stringify(
@@ -890,7 +897,7 @@ function GenerationPreviewContent() {
           const audioId = `tts_${action.id}`;
           action.audioId = audioId;
           try {
-            const resp = await fetch('/api/generate/tts', {
+            const resp = await fetch(withBasePath('/api/generate/tts'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

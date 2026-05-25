@@ -5,7 +5,7 @@ import { saveAs } from 'file-saver';
 import { toast } from 'sonner';
 import { useStageStore } from '@/lib/store/stage';
 import { useI18n } from '@/lib/hooks/use-i18n';
-import { db, getGeneratedAgentsByStageId } from '@/lib/utils/database';
+import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import {
   CLASSROOM_ZIP_FORMAT_VERSION,
   CLASSROOM_ZIP_EXTENSION,
@@ -15,7 +15,12 @@ import {
   type ManifestScene,
   type MediaIndexEntry,
 } from './classroom-zip-types';
-import { collectAudioFiles, collectMediaFiles, actionsToManifest } from './classroom-zip-utils';
+import {
+  collectAudioFiles,
+  collectMediaFiles,
+  collectGeneratedAgents,
+  actionsToManifest,
+} from './classroom-zip-utils';
 import type { SpeechAction } from '@/lib/types/action';
 import { createLogger } from '@/lib/logger';
 
@@ -36,12 +41,11 @@ export function useExportClassroom() {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
 
-      // 1. Read latest stage name from IndexedDB (may have been renamed on home page)
-      const freshStage = await db.stages.get(stage.id);
-      const latestName = freshStage?.name || stage.name;
+      // 1. Read latest stage name from server-backed store
+      const latestName = stage.name;
 
-      // 2. Collect agents from DB
-      const agentRecords = await getGeneratedAgentsByStageId(stage.id);
+      // 2. Collect generated agents from server
+      const agentRecords = await collectGeneratedAgents(stage.id);
 
       // 3. Collect audio files
       const audioFiles = await collectAudioFiles(scenes);
@@ -74,7 +78,7 @@ export function useExportClassroom() {
         priority: a.priority,
       }));
 
-      // Also include generatedAgentConfigs from stage if agents not in DB
+      // Also include embedded/generated registry agents when server has no generated-agent rows.
       if (manifestAgents.length === 0 && stage.generatedAgentConfigs?.length) {
         for (const a of stage.generatedAgentConfigs) {
           manifestAgents.push({
@@ -93,6 +97,22 @@ export function useExportClassroom() {
       agentRecords.forEach((a, i) => agentIdToIndex.set(a.id, i));
       if (stage.generatedAgentConfigs?.length && agentRecords.length === 0) {
         stage.generatedAgentConfigs.forEach((a, i) => agentIdToIndex.set(a.id, i));
+      } else if (agentRecords.length === 0) {
+        const registry = useAgentRegistry.getState();
+        (stage.agentIds || []).forEach((id) => {
+          if (agentIdToIndex.has(id)) return;
+          const agent = registry.getAgent(id);
+          if (!agent?.isGenerated) return;
+          agentIdToIndex.set(id, agentIdToIndex.size);
+          manifestAgents.push({
+            name: agent.name,
+            role: agent.role,
+            persona: agent.persona,
+            avatar: agent.avatar,
+            color: agent.color,
+            priority: agent.priority,
+          });
+        });
       }
 
       const manifestScenes: ManifestScene[] = scenes.map((scene) => ({

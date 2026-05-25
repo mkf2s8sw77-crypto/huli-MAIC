@@ -34,7 +34,7 @@ export interface ManifestAgent {
   avatar: string;
   color: string;
   priority: number;
-  /** Reserved for forward-compat. Not currently persisted in GeneratedAgentRecord DB schema. */
+  /** Reserved for forward-compat. Not currently persisted in generated-agent server rows. */
   voiceConfig?: { providerId: string; voiceId: string };
 }
 

@@ -4,11 +4,15 @@ import { useState, useCallback, useRef } from 'react';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import { useI18n } from '@/lib/hooks/use-i18n';
-import { db, mediaFileKey } from '@/lib/utils/database';
-import type { AudioFileRecord, MediaFileRecord, GeneratedAgentRecord } from '@/lib/utils/database';
+import { db } from '@/lib/utils/database';
+import type { AudioFileRecord } from '@/lib/utils/database';
 import type { ClassroomManifest, ManifestScene } from '@/lib/export/classroom-zip-types';
 import { rewriteAudioRefsToIds } from '@/lib/export/classroom-zip-utils';
 import { createLogger } from '@/lib/logger';
+import type { Scene, Stage } from '@/lib/types/stage';
+import { deleteStageData, saveStageData } from '@/lib/utils/stage-storage';
+import { withBasePath } from '@/lib/utils/base-path';
+import { saveGeneratedAgents } from '@/lib/orchestration/registry/store';
 
 const log = createLogger('ImportClassroom');
 
@@ -19,6 +23,56 @@ export type ImportPhase =
   | 'writingMedia'
   | 'writingCourse'
   | 'done';
+
+function getMediaElementId(zipPath: string): string {
+  const filename = zipPath.split('/').pop() ?? '';
+  return filename.replace(/\.\w+$/, '');
+}
+
+function getMediaMimeType(zipPath: string, manifestMimeType?: string): string {
+  if (manifestMimeType) return manifestMimeType;
+  const ext = zipPath.split('.').pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+  };
+  return (ext && map[ext]) || 'application/octet-stream';
+}
+
+async function uploadImportedMedia(input: {
+  stageId: string;
+  zipPath: string;
+  blob: Blob;
+  poster?: Blob;
+  mimeType: string;
+  prompt?: string;
+}) {
+  const elementId = getMediaElementId(input.zipPath);
+  if (!elementId) return;
+
+  const formData = new FormData();
+  formData.append('file', input.blob, input.zipPath.split('/').pop() || elementId);
+  formData.append('elementId', elementId);
+  formData.append('type', input.mimeType.startsWith('video/') ? 'video' : 'image');
+  formData.append('prompt', input.prompt || '');
+  formData.append('params', '{}');
+  if (input.poster) {
+    formData.append('poster', input.poster, `${elementId}_poster.jpg`);
+  }
+
+  const response = await fetch(
+    withBasePath(`/api/stages/${encodeURIComponent(input.stageId)}/media`),
+    { method: 'POST', body: formData },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to upload imported media: HTTP ${response.status}`);
+  }
+}
 
 export function useImportClassroom(onSuccess?: () => void) {
   const [importing, setImporting] = useState(false);
@@ -41,6 +95,9 @@ export function useImportClassroom(onSuccess?: () => void) {
       setImporting(true);
       setPhase('parsing');
       const toastId = toast.loading(t('import.parsing'));
+
+      let createdStageId: string | null = null;
+      const importedAudioIds: string[] = [];
 
       try {
         // 0. Size check — warn for files over 200MB
@@ -102,21 +159,7 @@ export function useImportClassroom(onSuccess?: () => void) {
           }
         }
 
-        // Media ref → new ID mapping
-        const mediaRefToNewId: Record<string, string> = {};
-        for (const [zipPath, entry] of Object.entries(manifest.mediaIndex ?? {})) {
-          if ((entry.type === 'generated' || entry.type === 'image') && !entry.missing) {
-            const filename = zipPath.split('/').pop() ?? '';
-            const elementId = filename.replace(/\.\w+$/, '');
-            mediaRefToNewId[zipPath] = mediaFileKey(newStageId, elementId);
-          }
-        }
-
-        // 4. Write media to IndexedDB
-        setPhase('writingMedia');
-        toast.loading(t('import.writingMedia'), { id: toastId });
-
-        // Write audio files one at a time
+        // 4. Write local audio cache. Audio is still a browser cache by design.
         for (const [zipPath, newId] of Object.entries(audioRefToNewId)) {
           const zipEntry = zip.file(zipPath);
           if (!zipEntry) continue;
@@ -131,43 +174,14 @@ export function useImportClassroom(onSuccess?: () => void) {
             createdAt: now,
           };
           await db.audioFiles.put(record);
+          importedAudioIds.push(newId);
         }
 
-        // Write generated media files one at a time
-        for (const [zipPath, newId] of Object.entries(mediaRefToNewId)) {
-          const zipEntry = zip.file(zipPath);
-          if (!zipEntry) continue;
-          const blob = await zipEntry.async('blob');
-          const meta = manifest.mediaIndex[zipPath];
-
-          const record: MediaFileRecord = {
-            id: newId,
-            stageId: newStageId,
-            type: meta.mimeType?.startsWith('video/') ? 'video' : 'image',
-            blob,
-            mimeType: meta.mimeType || 'image/jpeg',
-            size: meta.size || blob.size,
-            prompt: meta.prompt || '',
-            params: '',
-            createdAt: now,
-          };
-
-          // Check for poster before writing to avoid redundant put
-          const posterPath = zipPath.replace(/\.\w+$/, '.poster.jpg');
-          const posterEntry = zip.file(posterPath);
-          if (posterEntry) {
-            record.poster = await posterEntry.async('blob');
-          }
-
-          await db.mediaFiles.put(record);
-        }
-
-        // 5. Write course data
+        // 5. Write course data to the server-side primary store.
         setPhase('writingCourse');
         toast.loading(t('import.writingCourse'), { id: toastId });
 
-        // Write stage
-        await db.stages.put({
+        const importedStage: Stage = {
           id: newStageId,
           name: manifest.stage.name || 'Imported Classroom',
           description: manifest.stage.description,
@@ -176,67 +190,111 @@ export function useImportClassroom(onSuccess?: () => void) {
           createdAt: manifest.stage.createdAt || now,
           updatedAt: now,
           agentIds: newAgentIds.length > 0 ? newAgentIds : undefined,
-        });
-
-        // Write agents
-        if (manifest.agents?.length) {
-          const agentRecords: GeneratedAgentRecord[] = manifest.agents.map((a, i) => ({
-            id: newAgentIds[i],
-            stageId: newStageId,
-            name: a.name,
-            role: a.role,
-            persona: a.persona,
-            avatar: a.avatar,
-            color: a.color,
-            priority: a.priority,
-            createdAt: now,
-          }));
-          await db.generatedAgents.bulkPut(agentRecords);
-        }
+        };
 
         // Write scenes with rewritten references
-        const sceneRecords = manifest.scenes.map((mScene: ManifestScene, index: number) => {
-          const newSceneId = nanoid();
+        const sceneRecords: Scene[] = manifest.scenes.map(
+          (mScene: ManifestScene, index: number) => {
+            const newSceneId = nanoid();
 
-          const actions = mScene.actions
-            ? rewriteAudioRefsToIds(mScene.actions, audioRefToNewId, {
-                agentIds: newAgentIds,
-                fallbackDiscussionAgentIndex,
-              })
-            : undefined;
+            const actions = mScene.actions
+              ? rewriteAudioRefsToIds(mScene.actions, audioRefToNewId, {
+                  agentIds: newAgentIds,
+                  fallbackDiscussionAgentIndex,
+                })
+              : undefined;
 
-          let multiAgent = undefined;
-          if (mScene.multiAgent?.enabled) {
-            multiAgent = {
-              enabled: true,
-              agentIds: (mScene.multiAgent.agentIndices ?? [])
-                .map((idx) => newAgentIds[idx])
-                .filter(Boolean),
-              directorPrompt: mScene.multiAgent.directorPrompt,
+            let multiAgent = undefined;
+            if (mScene.multiAgent?.enabled) {
+              multiAgent = {
+                enabled: true,
+                agentIds: (mScene.multiAgent.agentIndices ?? [])
+                  .map((idx) => newAgentIds[idx])
+                  .filter(Boolean),
+                directorPrompt: mScene.multiAgent.directorPrompt,
+              };
+            }
+
+            return {
+              id: newSceneId,
+              stageId: newStageId,
+              type: mScene.type,
+              title: mScene.title,
+              order: mScene.order ?? index,
+              content: mScene.content,
+              actions,
+              whiteboards: mScene.whiteboards,
+              multiAgent,
+              createdAt: now,
+              updatedAt: now,
             };
-          }
+          },
+        );
 
-          return {
-            id: newSceneId,
-            stageId: newStageId,
-            type: mScene.type,
-            title: mScene.title,
-            order: mScene.order ?? index,
-            content: mScene.content,
-            actions,
-            whiteboard: mScene.whiteboards,
-            multiAgent,
-            createdAt: now,
-            updatedAt: now,
-          };
+        createdStageId = newStageId;
+        await saveStageData(newStageId, {
+          stage: importedStage,
+          scenes: sceneRecords,
+          currentSceneId: sceneRecords[0]?.id || null,
+          chats: [],
         });
-        await db.scenes.bulkPut(sceneRecords);
 
-        // 6. Done
+        if (manifest.agents?.length) {
+          await saveGeneratedAgents(
+            newStageId,
+            manifest.agents.map((agent, index) => ({
+              id: newAgentIds[index],
+              name: agent.name,
+              role: agent.role,
+              persona: agent.persona,
+              avatar: agent.avatar,
+              color: agent.color,
+              priority: agent.priority,
+              voiceConfig: agent.voiceConfig,
+            })),
+          );
+        }
+
+        // 6. Upload generated media to the server-side primary media store.
+        setPhase('writingMedia');
+        toast.loading(t('import.writingMedia'), { id: toastId });
+
+        for (const [zipPath, entry] of Object.entries(manifest.mediaIndex ?? {})) {
+          if ((entry.type !== 'generated' && entry.type !== 'image') || entry.missing) continue;
+          const zipEntry = zip.file(zipPath);
+          if (!zipEntry) continue;
+
+          const blob = await zipEntry.async('blob');
+          const posterPath = zipPath.replace(/\.\w+$/, '.poster.jpg');
+          const posterEntry = zip.file(posterPath);
+          const poster = posterEntry ? await posterEntry.async('blob') : undefined;
+          const mimeType = getMediaMimeType(zipPath, entry.mimeType);
+
+          await uploadImportedMedia({
+            stageId: newStageId,
+            zipPath,
+            blob,
+            poster,
+            mimeType,
+            prompt: entry.prompt,
+          });
+        }
+
+        // 7. Done
         setPhase('done');
         toast.success(t('import.success'), { id: toastId });
         onSuccess?.();
       } catch (error) {
+        if (createdStageId) {
+          await deleteStageData(createdStageId).catch((cleanupError) => {
+            log.warn('Failed to roll back imported stage:', cleanupError);
+          });
+        }
+        if (importedAudioIds.length > 0) {
+          await db.audioFiles.bulkDelete(importedAudioIds).catch((cleanupError) => {
+            log.warn('Failed to roll back imported audio cache:', cleanupError);
+          });
+        }
         log.error('Classroom ZIP import failed:', error);
         const isQuotaError = error instanceof DOMException && error.name === 'QuotaExceededError';
         toast.error(isQuotaError ? t('import.error.storageFull') : t('import.error.invalidZip'), {

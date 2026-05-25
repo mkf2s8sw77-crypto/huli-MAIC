@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
+import { useState, useEffect, useMemo, useRef, useDeferredValue, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -143,7 +143,10 @@ function HomePage() {
         const detected = navigator.language?.startsWith('zh') ? 'zh-CN' : 'en-US';
         updates.language = detected;
       }
-      if (savedViewportPreset && VIEWPORT_OPTIONS.some((option) => option.id === savedViewportPreset)) {
+      if (
+        savedViewportPreset &&
+        VIEWPORT_OPTIONS.some((option) => option.id === savedViewportPreset)
+      ) {
         updates.viewportPreset = savedViewportPreset as ViewportPreset;
       }
       if (savedInteractiveMode === 'true') updates.interactiveMode = true;
@@ -183,12 +186,12 @@ function HomePage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const thumbnailsRef = useRef<Record<string, Slide>>({});
 
-  const replaceThumbnails = (slides: Record<string, Slide>) => {
+  const replaceThumbnails = useCallback((slides: Record<string, Slide>) => {
     const previous = thumbnailsRef.current;
     thumbnailsRef.current = slides;
     setThumbnails(slides);
     window.setTimeout(() => revokeThumbnailSlideMediaUrls(previous), 0);
-  };
+  }, []);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -202,7 +205,7 @@ function HomePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [themeOpen]);
 
-  const loadClassrooms = async () => {
+  const loadClassrooms = useCallback(async () => {
     try {
       const list = await listStages();
       setClassrooms(list);
@@ -218,13 +221,10 @@ function HomePage() {
     } catch (err) {
       log.error('Failed to load classrooms:', err);
     }
-  };
+  }, [replaceThumbnails]);
 
-  const { importing, fileInputRef, triggerFileSelect, handleFileChange } = useImportClassroom(
-    () => {
-      loadClassrooms();
-    },
-  );
+  const { importing, fileInputRef, triggerFileSelect, handleFileChange } =
+    useImportClassroom(loadClassrooms);
 
   useEffect(() => {
     // Clear stale media store to prevent cross-course thumbnail contamination.
@@ -240,7 +240,7 @@ function HomePage() {
       revokeThumbnailSlideMediaUrls(thumbnailsRef.current);
       thumbnailsRef.current = {};
     };
-  }, []);
+  }, [loadClassrooms]);
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -692,7 +692,9 @@ function HomePage() {
                       : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
                   )}
                 >
-                  <span className="text-[11px] sm:text-xs font-medium">{t('toolbar.enterClassroom')}</span>
+                  <span className="text-[11px] sm:text-xs font-medium">
+                    {t('toolbar.enterClassroom')}
+                  </span>
                   <ArrowUp className="size-3.5" />
                 </button>
               </div>

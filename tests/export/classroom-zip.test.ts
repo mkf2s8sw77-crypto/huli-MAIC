@@ -1,10 +1,19 @@
-import { describe, test, expect } from 'vitest';
-import { rewriteAudioRefsToIds, actionsToManifest } from '@/lib/export/classroom-zip-utils';
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import {
+  rewriteAudioRefsToIds,
+  actionsToManifest,
+  collectGeneratedAgents,
+  collectMediaFiles,
+} from '@/lib/export/classroom-zip-utils';
 import {
   CLASSROOM_ZIP_FORMAT_VERSION,
   type ClassroomManifest,
 } from '@/lib/export/classroom-zip-types';
 import type { DiscussionAction, SpeechAction, SpotlightAction } from '@/lib/types/action';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 // ─── rewriteAudioRefsToIds ────────────────────────────────────
 
@@ -162,6 +171,91 @@ describe('actionsToManifest', () => {
       agentId: 'default-2',
     });
     expect(result[0]).not.toHaveProperty('agentIndex');
+  });
+});
+
+// ─── Server-backed export collectors ──────────────────────────
+
+describe('server-backed export collectors', () => {
+  test('collectMediaFiles reads server media metadata and downloads blobs', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/stages/stage-1/media') {
+        return Response.json({
+          success: true,
+          files: [
+            {
+              elementId: 'gen_img_1',
+              type: 'image',
+              mimeType: 'image/png',
+              size: 3,
+              prompt: 'draw image',
+              storageKey: 'stage-1/gen_img_1.png',
+            },
+            {
+              elementId: 'gen_vid_1',
+              type: 'video',
+              mimeType: 'video/mp4',
+              size: 5,
+              prompt: 'make video',
+              storageKey: 'stage-1/gen_vid_1.mp4',
+              posterStorageKey: 'stage-1/gen_vid_1_poster.jpg',
+            },
+            {
+              elementId: 'gen_img_failed',
+              type: 'image',
+              error: 'blocked',
+            },
+          ],
+        });
+      }
+      if (url === '/api/media/stage-1/gen_img_1.png') {
+        return new Response(new Blob(['img'], { type: 'image/png' }));
+      }
+      if (url === '/api/media/stage-1/gen_vid_1.mp4') {
+        return new Response(new Blob(['video'], { type: 'video/mp4' }));
+      }
+      if (url === '/api/media/stage-1/gen_vid_1_poster.jpg') {
+        return new Response(new Blob(['poster'], { type: 'image/jpeg' }));
+      }
+      return new Response('not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const files = await collectMediaFiles('stage-1');
+
+    expect(files.map((file) => file.zipPath)).toEqual([
+      'media/gen_img_1.png',
+      'media/gen_vid_1.mp4',
+    ]);
+    expect(files[0].record.prompt).toBe('draw image');
+    expect(files[1].record.poster).toBeInstanceOf(Blob);
+  });
+
+  test('collectGeneratedAgents reads server generated-agent rows', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          success: true,
+          agents: [
+            {
+              id: 'agent-1',
+              name: 'Student',
+              role: 'student',
+              persona: 'Curious',
+              avatar: '/avatars/student.png',
+              color: '#f00',
+              priority: 1,
+            },
+          ],
+        }),
+      ),
+    );
+
+    await expect(collectGeneratedAgents('stage-1')).resolves.toMatchObject([
+      { id: 'agent-1', role: 'student' },
+    ]);
   });
 });
 

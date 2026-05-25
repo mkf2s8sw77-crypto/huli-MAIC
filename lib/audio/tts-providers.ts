@@ -153,10 +153,6 @@ export async function generateTTS(
       return await generateTencentTTS(config, text);
     case 'voxcpm-tts':
       return await generateVoxCPMTTS(config, text);
-    case 'voxcpm-tts':
-      return await generateVoxCPMTTS(config, text);
-    case 'tencent-tts':
-      return await generateTencentTTS(config, text);
 
     case 'minimax-tts':
       return await generateMiniMaxTTS(config, text);
@@ -702,7 +698,11 @@ async function generateTencentTTS(
   }
 
   const Client = tencentcloud.tts.v20190823.Client;
-  const endpoint = (config.baseUrl || TTS_PROVIDERS['tencent-tts'].defaultBaseUrl || 'tts.tencentcloudapi.com')
+  const endpoint = (
+    config.baseUrl ||
+    TTS_PROVIDERS['tencent-tts'].defaultBaseUrl ||
+    'tts.tencentcloudapi.com'
+  )
     .replace(/^https?:\/\//i, '')
     .replace(/\/+$/, '');
   const codec = (config.format || 'mp3').toLowerCase();

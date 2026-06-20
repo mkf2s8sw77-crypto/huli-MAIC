@@ -69,11 +69,15 @@ export interface Stage {
   id: string;
   name: string;
   description?: string;
+  language?: 'zh-CN' | 'en-US';
   createdAt: number;
   updatedAt: number;
   // Stage metadata
   languageDirective?: string;
   style?: string;
+  viewportPreset?: string;
+  viewportSize?: number;
+  viewportRatio?: number;
   // Whiteboard data
   whiteboard?: Whiteboard[];
   // Generated video requests keyed by the mediaRef used by PPTVideoElement.

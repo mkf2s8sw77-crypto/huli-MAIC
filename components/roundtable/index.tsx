@@ -60,6 +60,7 @@ interface RoundtableProps {
   readonly onDiscussionSkip?: () => void;
   readonly onStopDiscussion?: () => void;
   readonly onInputActivate?: () => void;
+  readonly onPresentationInteractionChange?: (active: boolean) => void;
 
   readonly onResumeTopic?: () => void;
   readonly onPlayPause?: () => void;
@@ -127,6 +128,7 @@ export function Roundtable({
   onDiscussionSkip,
   onStopDiscussion,
   onInputActivate,
+  onPresentationInteractionChange,
 
   onResumeTopic,
   onPlayPause,
@@ -170,6 +172,11 @@ export function Roundtable({
   // Send cooldown: lock input from "message sent" until "agent bubble appears"
   const [isSendCooldown, setIsSendCooldown] = useState(false);
   const isSendCooldownRef = useRef(false);
+
+  useEffect(() => {
+    onPresentationInteractionChange?.(isInputOpen || isVoiceOpen);
+    return () => onPresentationInteractionChange?.(false);
+  }, [isInputOpen, isVoiceOpen, onPresentationInteractionChange]);
 
   const teacherParticipant = initialParticipants.find((p) => p.role === 'teacher');
   const studentParticipants = initialParticipants.filter(

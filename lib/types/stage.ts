@@ -14,7 +14,6 @@ import type { Scene as DslScene, SceneContent as DslSceneContent } from '@maic/d
 import type { Action } from '@/lib/types/action';
 import type { WidgetType, WidgetConfig, TeacherAction } from '@/lib/types/widgets';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
-import type { ViewportPreset } from '@/lib/config/viewport';
 
 export type {
   SceneType,

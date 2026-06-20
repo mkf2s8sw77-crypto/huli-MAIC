@@ -22,6 +22,7 @@ import {
   Atom,
   X,
   Presentation,
+  Sparkles,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { LanguageSwitcher } from '@/components/language-switcher';

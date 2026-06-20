@@ -13,8 +13,7 @@ import { createLogger } from '@/lib/logger';
 import { MediaStageProvider } from '@/lib/contexts/media-stage-context';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { ServerProvidersInit } from '@/components/server-providers-init';
-import { migrateScene } from '@/lib/edit/slide-schema';
-import type { Scene } from '@/lib/types/stage';
+import type { ViewportPreset } from '@/lib/config/viewport';
 
 const log = createLogger('Classroom');
 
@@ -129,7 +128,7 @@ export default function ClassroomDetailPage() {
             name: stage.name || '',
             description: stage.description,
             style: stage.style,
-            viewportPreset: stage.viewportPreset,
+            viewportPreset: stage.viewportPreset as ViewportPreset | undefined,
             viewportSize: stage.viewportSize,
             viewportRatio: stage.viewportRatio,
           },

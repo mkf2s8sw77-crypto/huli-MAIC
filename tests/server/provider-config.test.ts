@@ -61,6 +61,10 @@ function clearProviderEnv() {
   delete process.env.TAVILY_API_KEY;
   delete process.env.BOCHA_API_KEY;
   delete process.env.BOCHA_BASE_URL;
+  delete process.env.TTS_TENCENT_SECRET_ID;
+  delete process.env.TTS_TENCENT_SECRET_KEY;
+  delete process.env.TTS_TENCENT_REGION;
+  delete process.env.TTS_TENCENT_ENDPOINT;
 }
 
 vi.mock('fs', async (importOriginal) => {

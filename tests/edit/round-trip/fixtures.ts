@@ -1,6 +1,7 @@
 import { createDefaultSlide, createDefaultTextElement } from '@/lib/edit/slide-edit-elements';
 import type { Scene, SlideContent } from '@/lib/types/stage';
 import type { Slide } from '@maic/dsl';
+import type { ViewportPreset } from '@/lib/config/viewport';
 
 /**
  * Build a minimal valid Scene/SlideContent/Slide trio for the round-trip
@@ -28,6 +29,7 @@ export function makeSlideFixture(): {
   return { scene, content, slide, textElementId: text.id };
 }
 
+export const VIEWPORT_PRESET: ViewportPreset = '16:9';
 export const VIEWPORT_SIZE = 1000;
 export const VIEWPORT_RATIO = 0.5625;
 export const RATIO_PX2_INCH = 96 * (VIEWPORT_SIZE / 960);

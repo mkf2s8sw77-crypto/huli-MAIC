@@ -58,6 +58,7 @@ function getASRProviderName(providerId: ASRProviderId, t: (key: string) => strin
     'browser-native': t('settings.providerBrowserNative'),
     'qwen-asr': t('settings.providerQwenASR'),
     'lemonade-asr': t('settings.providerLemonadeASR'),
+    'azure-asr': t('settings.providerAzureASR'),
   };
   return names[providerId];
 }

@@ -24,7 +24,6 @@ import { ActionEngine } from '@/lib/action/engine';
 import { createAudioPlayer } from '@/lib/utils/audio-player';
 import { useDiscussionTTS } from '@/lib/hooks/use-discussion-tts';
 import { useWidgetIframeStore } from '@/lib/store/widget-iframe';
-import type { AudioIndicatorState } from '@/components/roundtable/audio-indicator';
 import type { Action, DiscussionAction, SpeechAction } from '@/lib/types/action';
 import { cn } from '@/lib/utils';
 // Playback state persistence removed — refresh always starts from the beginning
@@ -161,17 +160,9 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
       [agentsRecord, selectedAgentIds],
     );
 
-    // Discussion TTS: audio indicator state
-    const [audioIndicatorState, setAudioIndicatorState] = useState<AudioIndicatorState>('idle');
-    const [audioAgentId, setAudioAgentId] = useState<string | null>(null);
-
     const discussionTTS = useDiscussionTTS({
       enabled: ttsEnabled && !ttsMuted,
       agents: selectedAgents,
-      onAudioStateChange: (agentId, state) => {
-        setAudioAgentId(agentId);
-        setAudioIndicatorState(state);
-      },
     });
 
     // Pick a student agent for discussion trigger (prioritize student > non-teacher > fallback)
@@ -1115,8 +1106,6 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
                 discussionRequest={discussionRequest}
                 engineMode={engineMode}
                 isStreaming={chatIsStreaming}
-                audioIndicatorState={audioIndicatorState}
-                audioAgentId={audioAgentId}
                 sessionType={
                   chatSessionType === 'qa'
                     ? 'qa'
@@ -1200,6 +1189,7 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
                     engineRef.current.pause();
                   }
                 }}
+                onPresentationInteractionChange={setIsPresentationInteractionActive}
                 onResumeTopic={doResumeTopic}
                 onPlayPause={handlePlayPause}
                 isDiscussionPaused={isDiscussionPaused}
@@ -1227,11 +1217,6 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
                 onPrevSlide={handlePreviousScene}
                 onNextSlide={handleNextScene}
                 onWhiteboardClose={handleWhiteboardToggle}
-                isPresenting={isPresenting}
-                controlsVisible={controlsVisible}
-                onTogglePresentation={togglePresentation}
-                onPresentationInteractionChange={setIsPresentationInteractionActive}
-                fullscreenContainerRef={stageRef}
               />
             </div>
           )}

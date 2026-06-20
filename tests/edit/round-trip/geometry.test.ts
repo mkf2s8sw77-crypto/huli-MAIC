@@ -7,6 +7,7 @@ import {
   makeSlideFixture,
   RATIO_PX2_INCH,
   RATIO_PX2_PT,
+  VIEWPORT_PRESET,
   VIEWPORT_RATIO,
   VIEWPORT_SIZE,
 } from './fixtures';
@@ -23,6 +24,7 @@ async function exportSlideContent(content: SlideContent, scene: Scene): Promise<
   return buildPptxBlob(
     [content.canvas],
     [scene],
+    VIEWPORT_PRESET,
     VIEWPORT_RATIO,
     VIEWPORT_SIZE,
     RATIO_PX2_INCH,

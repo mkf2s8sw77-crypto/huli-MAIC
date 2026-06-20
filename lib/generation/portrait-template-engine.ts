@@ -16,7 +16,7 @@ import type {
   PortraitCard,
   PortraitHeroBlock,
 } from './portrait-content-schema';
-import type { PPTElementOutline, PPTElementShadow, ShapeTextAlign } from '@/lib/types/slides';
+import type { PPTElementOutline, PPTElementShadow, ShapeTextAlign } from '@maic/dsl';
 
 type SlideElement = GeneratedSlideData['elements'][number];
 

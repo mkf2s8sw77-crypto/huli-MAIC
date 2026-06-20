@@ -35,7 +35,16 @@
     "ttsPreview": "Pré-visualizar",
     "ttsPreviewing": "Reproduzindo...",
     "interactiveModeHint": "Ative o modo interativo para conteúdos mais práticos",
-    "interactiveModeLabel": "Modo Interativo"
+    "interactiveModeLabel": "Modo Interativo",
+    "languageHint": "O curso será gerado neste idioma",
+    "viewportPreset": "Proporção",
+    "viewportPresetHint": "Escolha a proporção do canvas da sala"
+  },
+  "viewport": {
+    "16:9": "Paisagem 16:9",
+    "4:3": "Paisagem 4:3",
+    "3:4": "Retrato 3:4",
+    "9:16": "Retrato 9:16"
   },
   "export": {
     "pptx": "Exportar PPTX",
@@ -725,6 +734,7 @@
     "providerVoxCPMTTS": "VoxCPM2",
     "providerDoubaoTTS": "Doubao TTS 2.0 (Volcengine)",
     "providerElevenLabsTTS": "ElevenLabs TTS",
+    "providerTencentTTS": "Tencent Cloud TTS",
     "providerMiniMaxTTS": "MiniMax TTS",
     "providerLemonadeTTS": "Lemonade TTS (Local)",
     "providerBrowserNativeTTS": "TTS Nativo do Navegador",

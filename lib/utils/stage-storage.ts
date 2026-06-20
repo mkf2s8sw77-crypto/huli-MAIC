@@ -198,15 +198,15 @@ export function revokeThumbnailSlideMediaUrls(slides: Record<string, ThumbnailSl
 export async function getFirstSlideByStages(
   stageIds: string[],
   stageList?: StageListItem[],
-): Promise<Record<string, import('../types/slides').Slide>> {
-  const result: Record<string, import('../types/slides').Slide> = {};
+): Promise<Record<string, import('@maic/dsl').Slide>> {
+  const result: Record<string, import('@maic/dsl').Slide> = {};
 
   try {
     for (const stageId of stageIds) {
       const item = stageList?.find((s) => s.id === stageId);
       if (!item?.firstSlideCanvas) continue;
 
-      const slide = structuredClone(item.firstSlideCanvas) as unknown as import('../types/slides').Slide;
+      const slide = structuredClone(item.firstSlideCanvas) as unknown as import('@maic/dsl').Slide;
       if (!slide?.elements) continue;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

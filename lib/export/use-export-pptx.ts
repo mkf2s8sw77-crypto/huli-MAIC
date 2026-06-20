@@ -1116,7 +1116,7 @@ export function useExportPPTX() {
   const slideScenes = scenes.filter((s) => s.content.type === 'slide');
   const slides = slideScenes.map((s) => (s.content as SlideContent).canvas);
   const exportViewportPreset =
-    stage?.viewportPreset ||
+    (stage?.viewportPreset as ViewportPreset | undefined) ||
     (slides[0]?.viewportRatio
       ? getViewportPresetByRatio(slides[0].viewportRatio)
       : DEFAULT_VIEWPORT_PRESET);

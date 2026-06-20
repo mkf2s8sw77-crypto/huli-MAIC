@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       modelInfo,
       modelString,
       thinkingConfig,
-    } = await resolveModelFromRequest(req, body);
+    } = await resolveModelFromRequest(req, body, 'scene-actions');
     outlineTitle = outline?.title;
     resolvedModelString = modelString;
 

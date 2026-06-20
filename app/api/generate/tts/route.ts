@@ -8,10 +8,13 @@
  */
 
 import { NextRequest } from 'next/server';
-import { generateTTS } from '@/lib/audio/tts-providers';
+import { generateTTS, TTSRateLimitError } from '@/lib/audio/tts-providers';
 import {
+  isServerConfiguredProvider,
+  isServerTTSProviderDisabled,
   resolveTTSApiKey,
   resolveTTSBaseUrl,
+  resolveTTSModel,
   resolveTTSTencentRegion,
   resolveTTSTencentSecretId,
   resolveTTSTencentSecretKey,
@@ -61,13 +64,21 @@ export async function POST(req: NextRequest) {
       return apiError('INVALID_REQUEST', 400, 'browser-native-tts must be handled client-side');
     }
 
-    const isServerManagedProvider = ttsProviderId === 'tencent-tts';
+    if (isServerTTSProviderDisabled(ttsProviderId)) {
+      return apiError('PROVIDER_DISABLED', 403, 'This TTS provider is disabled by the server');
+    }
+
     const voxcpmVoicePrompt =
       typeof ttsProviderOptions?.voicePrompt === 'string' ? ttsProviderOptions.voicePrompt : '';
+    const voxcpmRegisteredVoiceId =
+      typeof ttsProviderOptions?.registeredVoiceId === 'string'
+        ? ttsProviderOptions.registeredVoiceId
+        : '';
     if (
       ttsProviderId === VOXCPM_TTS_PROVIDER_ID &&
       ttsVoice === VOXCPM_AUTO_VOICE_ID &&
-      !voxcpmVoicePrompt.trim()
+      !voxcpmVoicePrompt.trim() &&
+      !voxcpmRegisteredVoiceId.trim()
     ) {
       return apiError(
         'VOXCPM_AUTO_VOICE_REQUIRES_CONTEXT',
@@ -76,7 +87,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const clientBaseUrl = isServerManagedProvider ? undefined : ttsBaseUrl || undefined;
+    const managed = isServerConfiguredProvider('tts', ttsProviderId);
+    const clientBaseUrl = managed ? undefined : ttsBaseUrl || undefined;
     if (clientBaseUrl) {
       const ssrfError = await validateUrlForSSRF(clientBaseUrl);
       if (ssrfError) {
@@ -84,9 +96,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const apiKey = clientBaseUrl
-      ? ttsApiKey || ''
-      : resolveTTSApiKey(ttsProviderId, ttsApiKey || undefined);
+    const apiKey = resolveTTSApiKey(ttsProviderId, managed ? undefined : ttsApiKey || undefined);
     const baseUrl = resolveTTSBaseUrl(ttsProviderId, clientBaseUrl);
     const secretId =
       ttsProviderId === 'tencent-tts' ? resolveTTSTencentSecretId() : undefined;
@@ -103,10 +113,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Build TTS config
+    // Build TTS config (managed providers may pin the model server-side)
     const config = {
       providerId: ttsProviderId as TTSProviderId,
-      modelId: ttsModelId,
+      modelId: resolveTTSModel(ttsProviderId, ttsModelId),
       voice: ttsVoice,
       speed: ttsSpeed ?? 1.0,
       apiKey,
@@ -118,7 +128,8 @@ export async function POST(req: NextRequest) {
     };
 
     log.info(
-      `Generating TTS: provider=${ttsProviderId}, model=${ttsModelId || 'default'}, voice=${ttsVoice}, audioId=${audioId}, textLen=${text.length}`,
+      `Generating TTS: provider=${ttsProviderId}, model=${config.modelId || 'default'}, voice=${ttsVoice}, ` +
+        `registeredVoiceId=${voxcpmRegisteredVoiceId || 'none'}, audioId=${audioId}, textLen=${text.length}`,
     );
 
     // Generate audio
@@ -133,6 +144,9 @@ export async function POST(req: NextRequest) {
       `TTS generation failed [provider=${ttsProviderId ?? 'unknown'}, voice=${ttsVoice ?? 'unknown'}, audioId=${audioId ?? 'unknown'}]:`,
       error,
     );
+    if (error instanceof TTSRateLimitError) {
+      return apiError('RATE_LIMITED', 429, error.message);
+    }
     return apiError(
       'GENERATION_FAILED',
       500,

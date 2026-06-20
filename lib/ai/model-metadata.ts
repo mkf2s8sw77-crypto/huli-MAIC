@@ -214,6 +214,8 @@ const doubaoSeed20Effort: ThinkingCapability = {
   defaultEnabled: true,
 };
 
+const minimaxM3Thinking = toggleCapability('anthropic', false);
+
 const THINKING_CAPABILITIES: Record<string, ThinkingCapability> = {
   [getModelMetadataKey('openai', 'gpt-5.5')]: effortCapability(
     'openai',
@@ -241,6 +243,7 @@ const THINKING_CAPABILITIES: Record<string, ThinkingCapability> = {
     'none',
   ),
 
+  [getModelMetadataKey('anthropic', 'claude-opus-4-8')]: anthropicOpus47Effort,
   [getModelMetadataKey('anthropic', 'claude-opus-4-7')]: anthropicOpus47Effort,
   [getModelMetadataKey('anthropic', 'claude-opus-4-6')]: anthropicAdaptiveEffort,
   [getModelMetadataKey('anthropic', 'claude-sonnet-4-6')]: anthropicAdaptiveEffort,
@@ -287,6 +290,8 @@ const THINKING_CAPABILITIES: Record<string, ThinkingCapability> = {
   [getModelMetadataKey('glm', 'glm-4.6v')]: toggleCapability('glm'),
   [getModelMetadataKey('glm', 'glm-4.6v-flash')]: toggleCapability('glm'),
 
+  [getModelMetadataKey('qwen', 'qwen3.7-plus')]: qwenBudgetEnabled,
+  [getModelMetadataKey('qwen', 'qwen3.7-max')]: qwenBudgetEnabled,
   [getModelMetadataKey('qwen', 'qwen3.6-max-preview')]: qwenBudgetDisabled,
   [getModelMetadataKey('qwen', 'qwen3.6-plus')]: qwenBudgetEnabled,
   [getModelMetadataKey('qwen', 'qwen3.6-plus-2026-04-02')]: qwenBudgetEnabled,
@@ -332,6 +337,7 @@ const THINKING_CAPABILITIES: Record<string, ThinkingCapability> = {
   [getModelMetadataKey('grok', 'grok-4.20-multi-agent')]: fixedThinkingCapability,
   [getModelMetadataKey('grok', 'grok-4-1-fast-reasoning')]: fixedThinkingCapability,
 
+  [getModelMetadataKey('minimax', 'MiniMax-M3')]: minimaxM3Thinking,
   [getModelMetadataKey('minimax', 'MiniMax-M2.7')]: fixedThinkingCapability,
 
   [getModelMetadataKey('tencent-hunyuan', 'hy3-preview')]: hunyuanHy3Effort,

@@ -1,15 +1,16 @@
 {
   "name": "openmaic",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
-  "license": "AGPL-3.0",
+  "license": "MIT",
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
-    "postinstall": "cd packages/mathml2omml && npm run build && cd ../pptxgenjs && npm run build",
+    "postinstall": "cd packages/mathml2omml && npm run build && cd ../pptxgenjs && npm run build && cd ../@maic/dsl && pnpm run build && cd ../importer && pnpm run build && cd ../renderer && pnpm run build && cd ../../.. && node scripts/sync-maic-importer.mjs",
+    "sync:maic-importer": "node scripts/sync-maic-importer.mjs",
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/assert-vendor-maic-importer.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "check:i18n-keys": "node scripts/check-i18n-keys.mjs",
@@ -19,7 +20,10 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "eval:whiteboard": "tsx eval/whiteboard-layout/runner.ts",
-    "eval:outline-language": "tsx eval/outline-language/runner.ts"
+    "eval:outline-language": "tsx eval/outline-language/runner.ts",
+    "eval:orchestration": "tsx eval/orchestration/runner.ts",
+    "eval:orchestration:answering": "tsx eval/orchestration/answering-runner.ts",
+    "eval:orchestration:answer-content": "tsx eval/orchestration/answer-content-runner.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.71",
@@ -31,6 +35,18 @@
     "@copilotkit/backend": "^0.37.0",
     "@copilotkit/runtime": "^1.51.2",
     "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/literata": "^5.2.8",
+    "@fontsource/lxgw-wenkai": "^5.2.5",
+    "@fontsource/merriweather": "^5.2.11",
+    "@fontsource/montserrat": "^5.2.8",
+    "@fontsource/noto-sans-sc": "^5.2.9",
+    "@fontsource/noto-serif-sc": "^5.2.8",
+    "@fontsource/open-sans": "^5.2.7",
+    "@fontsource/roboto": "^5.2.10",
+    "@fontsource/source-sans-3": "^5.2.9",
+    "@fontsource/source-serif-4": "^5.2.9",
+    "@fontsource/zcool-kuaile": "^5.2.8",
     "@langchain/core": "^1.1.16",
     "@langchain/langgraph": "^1.1.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -76,6 +92,9 @@
     "partial-json": "^0.1.7",
     "pptxgenjs": "workspace:*",
     "pptxtojson": "^1.11.0",
+    "@maic/dsl": "workspace:*",
+    "@maic/importer": "workspace:*",
+    "@maic/renderer": "workspace:*",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-dropcursor": "^1.8.2",
     "prosemirror-gapcursor": "^1.4.0",
@@ -89,6 +108,7 @@
     "prosemirror-view": "^1.41.5",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
+    "react-colorful": "^5.7.0",
     "react-dom": "19.2.3",
     "react-i18next": "^17.0.1",
     "shadcn": "^3.6.3",
@@ -136,7 +156,7 @@
     "tslib": "^2.8.0",
     "tsx": "^4.21.0",
     "typescript": "^5",
-    "vitest": "^4.1.0",
+    "vitest": "^4.1.8",
     "vue-to-react": "^1.0.0"
   },
   "pnpm": {

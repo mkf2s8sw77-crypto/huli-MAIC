@@ -10,12 +10,7 @@ import { useStageStore } from '@/lib/store';
 import { useCanvasStore } from '@/lib/store/canvas';
 import { useMediaGenerationStore, isMediaPlaceholder } from '@/lib/store/media-generation';
 import { useI18n } from '@/lib/hooks/use-i18n';
-import type {
-  Slide,
-  PPTElementOutline,
-  PPTElementShadow,
-  PPTElementLink,
-} from '@/lib/types/slides';
+import type { Slide, PPTElementOutline, PPTElementShadow, PPTElementLink } from '@maic/dsl';
 import type { Scene, SlideContent } from '@/lib/types/stage';
 import type { SpeechAction } from '@/lib/types/action';
 import { getElementRange, getLineElementPath, getTableSubThemeColor } from '@/lib/utils/element';
@@ -30,6 +25,8 @@ import {
   getViewportPresetByRatio,
   type ViewportPreset,
 } from '@/lib/config/viewport';
+import { inlineHtmlAssets, createAssetFetcher } from './inline-assets';
+import { createProxiedFetch } from './proxied-fetch';
 
 const log = createLogger('ExportPPTX');
 
@@ -365,7 +362,10 @@ function buildSpeakerNotes(scene: Scene): string {
   return parts.join('\n');
 }
 
-async function buildPptxBlob(
+// Exported for the round-trip integration test harness — the test wires its
+// own slides + ratios in and inspects the resulting PPTX bytes via JSZip.
+// The hook below is still the only intended runtime caller.
+export async function buildPptxBlob(
   slides: Slide[],
   slideScenes: Scene[],
   viewportPreset: ViewportPreset,
@@ -1196,13 +1196,25 @@ export function useExportPPTX() {
       zip.file(`${fileName}.pptx`, pptxBlob);
 
       // 2. Add interactive HTML pages
+      const sharedFetcher = createAssetFetcher({ fetchImpl: createProxiedFetch() });
       let interactiveIndex = 0;
+      const failedAssetUrls = new Set<string>();
       for (const scene of scenes) {
         if (scene.content.type === 'interactive' && scene.content.html) {
           interactiveIndex++;
           const safeName = scene.title.replace(/[\\/:*?"<>|]/g, '_');
           const htmlFileName = `interactive/${String(interactiveIndex).padStart(2, '0')}_${safeName}.html`;
-          zip.file(htmlFileName, scene.content.html);
+          const { html: inlinedHtml, report } = await inlineHtmlAssets(scene.content.html, {
+            fetcher: sharedFetcher,
+          });
+          if (report.failed.length > 0) {
+            log.warn(
+              'Resource Pack: some interactive-scene assets could not be inlined:',
+              report.failed,
+            );
+            for (const f of report.failed) failedAssetUrls.add(f.url);
+          }
+          zip.file(htmlFileName, inlinedHtml);
         }
       }
 
@@ -1210,6 +1222,22 @@ export function useExportPPTX() {
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       saveAs(zipBlob, `${fileName}.zip`);
       toast.success(t('export.exportSuccess'));
+      if (failedAssetUrls.size > 0) {
+        const hosts = [
+          ...new Set(
+            [...failedAssetUrls].map((u) => {
+              try {
+                return new URL(u).host;
+              } catch {
+                return u;
+              }
+            }),
+          ),
+        ];
+        toast.warning(t('export.inlinePartial', { count: failedAssetUrls.size }), {
+          description: hosts.join(', '),
+        });
+      }
     });
   }, [
     withExportGuard,

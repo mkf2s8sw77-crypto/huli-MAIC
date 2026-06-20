@@ -13,6 +13,7 @@ import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { normalizeAgentAvatar } from '@/lib/utils/agent-avatar';
 import { resolveModelFromRequest } from '@/lib/server/resolve-model';
 import { AGENT_COLOR_PALETTE } from '@/lib/constants/agent-defaults';
+import { normalizeVoiceDesign } from '@/lib/audio/voice-design';
 
 const log = createLogger('Agent Profiles API');
 
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
       model: languageModel,
       modelString: _modelString,
       thinkingConfig,
-    } = await resolveModelFromRequest(req, body);
+    } = await resolveModelFromRequest(req, body, 'agent-profiles');
     modelString = _modelString;
 
     // ── Build prompt ──
@@ -129,6 +130,10 @@ Requirements:
   - Use the "path" value as the avatar field in the output
 - Each agent must be assigned one color from this list: ${JSON.stringify(AGENT_COLOR_PALETTE)}
   - Each agent must have a different color
+- Each agent needs a "voiceDesign" object describing their VOCAL identity (not personality), written following the language directive and consistent with the persona, as three short comma-free phrases:
+  - "identity": gender + age + role (e.g. "middle-aged male teacher")
+  - "texture": pitch + vocal quality (e.g. "warm low-pitched slightly husky")
+  - "delivery": emotion + pace (e.g. "calm measured encouraging")
 ${voicePrompt}
 
 Return a JSON object with this exact structure:
@@ -138,6 +143,7 @@ Return a JSON object with this exact structure:
       "name": "string",
       "role": "teacher" | "assistant" | "student",
       "persona": "string (2-3 sentences)",
+      "voiceDesign": { "identity": "string", "texture": "string", "delivery": "string" },
       "avatar": "string (from available list)",
       "color": "string (hex color from palette)",
       "priority": number (10 for teacher, 7 for assistant, 4-6 for student)${voiceJsonField}
@@ -171,6 +177,7 @@ Return a JSON object with this exact structure:
         color: string;
         priority: number;
         voice?: string;
+        voiceDesign?: unknown;
       }>;
     };
 
@@ -214,6 +221,8 @@ Return a JSON object with this exact structure:
         }
       }
 
+      const voiceDesign = normalizeVoiceDesign(agent.voiceDesign);
+
       return {
         id: `gen-${nanoid(8)}`,
         name: agent.name,
@@ -227,6 +236,7 @@ Return a JSON object with this exact structure:
         priority:
           agent.priority ?? (agent.role === 'teacher' ? 10 : agent.role === 'assistant' ? 7 : 5),
         ...(voiceConfig ? { voiceConfig } : {}),
+        ...(voiceDesign ? { voiceDesign } : {}),
       };
     });
 

@@ -112,7 +112,9 @@ export async function generateSceneOutlinesFromRequirements(
     researchContext?: string;
     teacherContext?: string;
   },
-): Promise<GenerationResult<{ languageDirective: string; outlines: SceneOutline[] }>> {
+): Promise<
+  GenerationResult<{ languageDirective: string; courseTitle?: string; outlines: SceneOutline[] }>
+> {
   const resolvedLanguage = resolveRequirementLanguage(
     requirements.requirement,
     requirements.language,
@@ -196,10 +198,11 @@ export async function generateSceneOutlinesFromRequirements(
 
     const response = await aiCall(prompts.system, prompts.user, visionImages);
     const parsed = parseJsonResponse<
-      { languageDirective: string; outlines: SceneOutline[] } | SceneOutline[]
+      { languageDirective: string; courseTitle?: string; outlines: SceneOutline[] } | SceneOutline[]
     >(response);
 
     let languageDirective: string;
+    let courseTitle: string | undefined;
     let rawOutlines: SceneOutline[];
     const fallbackLanguageDirective =
       resolvedLanguage === 'zh-CN'
@@ -209,8 +212,11 @@ export async function generateSceneOutlinesFromRequirements(
     if (Array.isArray(parsed)) {
       languageDirective = fallbackLanguageDirective;
       rawOutlines = parsed;
-    } else if (parsed && Array.isArray(parsed.outlines)) {
+    } else if (parsed && parsed.outlines) {
       languageDirective = parsed.languageDirective || fallbackLanguageDirective;
+      const rawTitle = parsed.courseTitle;
+      courseTitle =
+        typeof rawTitle === 'string' && rawTitle.trim() ? rawTitle.trim().slice(0, 120) : undefined;
       rawOutlines = parsed.outlines;
     } else {
       return { success: false, error: 'Failed to parse scene outlines response' };
@@ -234,7 +240,7 @@ export async function generateSceneOutlinesFromRequirements(
       totalScenes: result.length,
     });
 
-    return { success: true, data: { languageDirective, outlines: result } };
+    return { success: true, data: { languageDirective, courseTitle, outlines: result } };
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -245,12 +251,38 @@ export async function generateSceneOutlinesFromRequirements(
  * - interactive without interactiveConfig OR widgetType+widgetOutline → slide
  * - pbl without pblConfig or languageModel → slide
  */
+export function sanitizeProceduralSkillOutline(outline: SceneOutline): SceneOutline {
+  const widgetOutline = { ...(outline.widgetOutline ?? {}) };
+  delete widgetOutline.procedureType;
+  delete widgetOutline.task;
+  delete widgetOutline.tools;
+  delete widgetOutline.steps;
+  delete widgetOutline.successCriteria;
+  delete widgetOutline.errorConsequences;
+
+  return {
+    ...outline,
+    type: 'interactive',
+    widgetType: 'diagram',
+    description: outline.description
+      ? `${outline.description} Present this as a process or structure diagram.`
+      : 'Present this topic as a process or structure diagram.',
+    widgetOutline,
+  };
+}
+
 export function applyOutlineFallbacks(
   outline: SceneOutline,
   hasLanguageModel: boolean,
+  options: { allowProceduralSkill?: boolean } = {},
 ): SceneOutline {
   // Ultra Mode: interactive scenes with widgetType + widgetOutline are valid
   const hasWidgetConfig = outline.widgetType && outline.widgetOutline;
+
+  if (outline.widgetType === 'procedural-skill' && !options.allowProceduralSkill) {
+    log.warn(`Procedural-skill outline "${outline.title}" is not enabled, falling back to diagram`);
+    return sanitizeProceduralSkillOutline(outline);
+  }
 
   if (outline.type === 'interactive' && !outline.interactiveConfig && !hasWidgetConfig) {
     log.warn(

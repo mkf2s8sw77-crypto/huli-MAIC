@@ -32,6 +32,7 @@ export interface StageListItem {
   updatedAt: number;
   firstSlideCanvas?: Record<string, unknown> | null;
   interactiveMode?: boolean;
+  taskEngineMode?: boolean;
 }
 
 /**
@@ -168,7 +169,7 @@ type ThumbnailMediaElement = {
   poster?: string;
 };
 
-type ThumbnailSlide = import('../types/slides').Slide;
+type ThumbnailSlide = import('@maic/dsl').Slide;
 
 function revokeObjectUrl(url: string | undefined) {
   if (url?.startsWith('blob:')) {

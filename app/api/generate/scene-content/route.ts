@@ -25,6 +25,7 @@ import {
 } from '@/lib/config/viewport';
 import type { GeneratedSlideContent } from '@/lib/types/generation';
 import { resolveOutlineLanguage } from '@/lib/generation/language-policy';
+import { resolveVocationalActive } from '@/lib/config/feature-flags';
 
 const log = createLogger('Scene Content API');
 
@@ -149,6 +150,7 @@ export async function POST(req: NextRequest) {
       stageId,
       agents,
       languageDirective,
+      requirements,
     } = body as {
       outline: SceneOutline;
       allOutlines: SceneOutline[];
@@ -166,6 +168,7 @@ export async function POST(req: NextRequest) {
       stageId: string;
       agents?: AgentInfo[];
       languageDirective?: string;
+      requirements?: { taskEngineMode?: boolean };
     };
 
     // Validate required fields
@@ -193,12 +196,15 @@ export async function POST(req: NextRequest) {
     };
 
     // ── Model resolution from request headers/body ──
+    // Route per scene-content type (e.g. `scene-content:quiz`); getStageModel
+    // falls back to the base `scene-content` route when the type is unrouted.
+    const stage = outline.type ? (`scene-content:${outline.type}` as const) : 'scene-content';
     const {
       model: languageModel,
       modelInfo,
       modelString,
       thinkingConfig,
-    } = await resolveModelFromRequest(req, body);
+    } = await resolveModelFromRequest(req, body, stage);
     outlineTitle = rawOutline?.title;
     resolvedModelString = modelString;
 
@@ -245,7 +251,10 @@ export async function POST(req: NextRequest) {
     };
 
     // ── Apply fallbacks ──
-    const effectiveOutline = applyOutlineFallbacks(outline, !!languageModel);
+    const vocationalActive = resolveVocationalActive(requirements);
+    const effectiveOutline = applyOutlineFallbacks(outline, !!languageModel, {
+      allowProceduralSkill: vocationalActive,
+    });
 
     // ── Filter images assigned to this outline ──
     let assignedImages: PdfImage[] | undefined;
@@ -285,6 +294,7 @@ export async function POST(req: NextRequest) {
           viewportRatio: stageInfo?.viewportRatio,
         },
         thinkingConfig,
+        allowProceduralSkill: vocationalActive,
       });
     } catch (error) {
       if (effectiveOutline.type === 'slide') {

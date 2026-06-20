@@ -13,6 +13,8 @@ import { createLogger } from '@/lib/logger';
 import { MediaStageProvider } from '@/lib/contexts/media-stage-context';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { ServerProvidersInit } from '@/components/server-providers-init';
+import { migrateScene } from '@/lib/edit/slide-schema';
+import type { Scene } from '@/lib/types/stage';
 
 const log = createLogger('Classroom');
 
@@ -50,23 +52,29 @@ export default function ClassroomDetailPage() {
         await import('@/lib/orchestration/registry/store');
       const generatedAgentIds = await loadGeneratedAgentsForStage(classroomId);
       const { useSettingsStore } = await import('@/lib/store/settings');
-      if (generatedAgentIds.length > 0) {
-        useSettingsStore.getState().setAgentMode('auto');
-        useSettingsStore.getState().setSelectedAgentIds(generatedAgentIds);
-      } else {
-        const stage = useStageStore.getState().stage;
-        const stageAgentIds = stage?.agentIds;
-        const registry = useAgentRegistry.getState();
-        const cleanIds = stageAgentIds?.filter((id) => {
+      const { restoreAgentSelection } =
+        await import('@/lib/orchestration/registry/agent-selection');
+      const settings = useSettingsStore.getState();
+      const registry = useAgentRegistry.getState();
+      const stage = useStageStore.getState().stage;
+      const { selection: next, isUserSet } = restoreAgentSelection({
+        persisted: { mode: settings.agentMode, selectedAgentIds: settings.selectedAgentIds },
+        persistedIsUserSet: settings.agentSelectionIsUserSet,
+        generatedAgentIds,
+        stageAgentIds: stage?.agentIds,
+        isPresetAgent: (id) => {
           const a = registry.getAgent(id);
-          return a && !a.isGenerated;
-        });
-        useSettingsStore.getState().setAgentMode('preset');
-        useSettingsStore
-          .getState()
-          .setSelectedAgentIds(
-            cleanIds && cleanIds.length > 0 ? cleanIds : ['default-1', 'default-2', 'default-3'],
-          );
+          return !!a && !a.isGenerated;
+        },
+      });
+      // restoreAgentSelection returns the persisted object as-is when keeping
+      // it, so reference checks skip redundant store writes.
+      if (next.mode !== settings.agentMode) settings.setAgentMode(next.mode);
+      if (next.selectedAgentIds !== settings.selectedAgentIds) {
+        settings.setSelectedAgentIds(next.selectedAgentIds);
+      }
+      if (isUserSet !== settings.agentSelectionIsUserSet) {
+        settings.setAgentSelectionIsUserSet(isUserSet);
       }
     } catch (error) {
       log.error('Failed to load classroom:', error);

@@ -21,8 +21,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ImageProviderId } from '@/lib/media/types';
-import { MEDIA_SETTINGS_LOCKED } from '@/lib/config/media-settings';
-import { withBasePath } from '@/lib/utils/base-path';
 
 interface ImageSettingsProps {
   selectedProviderId: ImageProviderId;
@@ -62,7 +60,6 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
     [currentConfig?.customModels],
   );
   const isServerConfigured = !!currentConfig?.isServerConfigured;
-  const isReadOnly = MEDIA_SETTINGS_LOCKED;
   const requiresApiKey = currentProvider?.requiresApiKey ?? true;
 
   const handleApiKeyChange = (apiKey: string) => {
@@ -78,7 +75,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
     setTestStatus('idle');
     setTestMessage('');
     try {
-      const response = await fetch(withBasePath('/api/verify-image-provider'), {
+      const response = await fetch('/api/verify-image-provider', {
         method: 'POST',
         headers: {
           'x-image-provider': selectedProviderId,
@@ -151,121 +148,106 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
           {t('settings.serverConfiguredNotice')}
         </div>
       )}
-      {/* API Key + Test inline */}
-      <div className="space-y-2">
-        <Label>API Key</Label>
-        <div className="flex gap-2">
-          <div className="relative flex-1">
+
+      {/* Managed providers are admin-owned: the operator's key and base URL are
+          authoritative and not overridable here, so the editing inputs are hidden. */}
+      {!isServerConfigured && (
+        <>
+          {/* API Key + Test inline */}
+          <div className="space-y-2">
+            <Label>API Key</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  name={`image-api-key-${selectedProviderId}`}
+                  type={showApiKey ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={t('settings.enterApiKey')}
+                  value={currentConfig?.apiKey || ''}
+                  onChange={(e) => handleApiKeyChange(e.target.value)}
+                  className="h-8 pr-8"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTest}
+                disabled={testLoading || (requiresApiKey && !currentConfig?.apiKey)}
+                className="gap-1.5"
+              >
+                {testLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <>
+                    <Zap className="h-3.5 w-3.5" />
+                    {t('settings.testConnection')}
+                  </>
+                )}
+              </Button>
+            </div>
+            {testMessage && (
+              <div
+                className={cn(
+                  'rounded-lg p-3 text-sm overflow-hidden',
+                  testStatus === 'success' &&
+                    'bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800',
+                  testStatus === 'error' &&
+                    'bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800',
+                )}
+              >
+                <div className="flex items-start gap-2 min-w-0">
+                  {testStatus === 'success' && <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />}
+                  {testStatus === 'error' && <XCircle className="h-4 w-4 mt-0.5 shrink-0" />}
+                  <p className="flex-1 min-w-0 break-all">{testMessage}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Base URL */}
+          <div className="space-y-2">
+            <Label>Base URL</Label>
             <Input
-              name={`image-api-key-${selectedProviderId}`}
-              type={showApiKey ? 'text' : 'password'}
-              autoComplete="new-password"
+              name={`image-base-url-${selectedProviderId}`}
+              type="url"
+              autoComplete="off"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              placeholder={
-                isServerConfigured ? t('settings.optionalOverride') : t('settings.enterApiKey')
-              }
-              value={currentConfig?.apiKey || ''}
-              disabled={isReadOnly}
-              onChange={(e) => handleApiKeyChange(e.target.value)}
-              className="h-8 pr-8"
+              value={currentConfig?.baseUrl || ''}
+              onChange={(e) => handleBaseUrlChange(e.target.value)}
+              placeholder={currentProvider?.defaultBaseUrl || t('settings.enterCustomBaseUrl')}
+              className="h-8"
             />
-            <button
-              type="button"
-              disabled={isReadOnly}
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
+            {(() => {
+              const effectiveBaseUrl =
+                currentConfig?.baseUrl || currentProvider?.defaultBaseUrl || '';
+              if (!effectiveBaseUrl) return null;
+              return (
+                <p className="text-xs text-muted-foreground break-all">
+                  {t('settings.requestUrl')}: {effectiveBaseUrl}
+                </p>
+              );
+            })()}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleTest}
-            disabled={
-              isReadOnly ||
-              testLoading ||
-              (requiresApiKey && !currentConfig?.apiKey && !isServerConfigured)
-            }
-            className="gap-1.5"
-          >
-            {testLoading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <>
-                <Zap className="h-3.5 w-3.5" />
-                {t('settings.testConnection')}
-              </>
-            )}
-          </Button>
-        </div>
-        {testMessage && (
-          <div
-            className={cn(
-              'rounded-lg p-3 text-sm overflow-hidden',
-              testStatus === 'success' &&
-                'bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800',
-              testStatus === 'error' &&
-                'bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800',
-            )}
-          >
-            <div className="flex items-start gap-2 min-w-0">
-              {testStatus === 'success' && <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />}
-              {testStatus === 'error' && <XCircle className="h-4 w-4 mt-0.5 shrink-0" />}
-              <p className="flex-1 min-w-0 break-all">{testMessage}</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Base URL */}
-      <div className="space-y-2">
-        <Label>Base URL</Label>
-        <Input
-          name={`image-base-url-${selectedProviderId}`}
-          type="url"
-          autoComplete="off"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          value={currentConfig?.baseUrl || ''}
-          disabled={isReadOnly}
-          onChange={(e) => handleBaseUrlChange(e.target.value)}
-          placeholder={
-            currentConfig?.serverBaseUrl ||
-            currentProvider?.defaultBaseUrl ||
-            t('settings.enterCustomBaseUrl')
-          }
-          className="h-8"
-        />
-        {(() => {
-          const effectiveBaseUrl =
-            currentConfig?.baseUrl ||
-            currentConfig?.serverBaseUrl ||
-            currentProvider?.defaultBaseUrl ||
-            '';
-          if (!effectiveBaseUrl) return null;
-          return (
-            <p className="text-xs text-muted-foreground break-all">
-              {t('settings.requestUrl')}: {effectiveBaseUrl}
-            </p>
-          );
-        })()}
-      </div>
+        </>
+      )}
 
       {/* Model list */}
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Label className="text-base">{t('settings.models')}</Label>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleOpenAddModel}
-            disabled={isReadOnly}
-            className="gap-1.5"
-          >
+          <Button variant="outline" size="sm" onClick={handleOpenAddModel} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" />
             {t('settings.addNewModel')}
           </Button>
@@ -300,7 +282,6 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
                   variant="outline"
                   size="sm"
                   className="h-8 px-2"
-                  disabled={isReadOnly}
                   onClick={() => handleOpenEditModel(index)}
                   title={t('settings.editModel')}
                 >
@@ -310,7 +291,6 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
                   variant="outline"
                   size="sm"
                   className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  disabled={isReadOnly}
                   onClick={() => handleDeleteModel(index)}
                   title={t('settings.deleteModel')}
                 >
@@ -336,7 +316,6 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
               <Label>{t('settings.modelId')}</Label>
               <Input
                 value={modelForm.id}
-                disabled={isReadOnly}
                 onChange={(e) => setModelForm((prev) => ({ ...prev, id: e.target.value }))}
                 placeholder="e.g. my-custom-model-v1"
                 className="h-8 font-mono text-sm"
@@ -346,7 +325,6 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
               <Label>{t('settings.modelName')}</Label>
               <Input
                 value={modelForm.name}
-                disabled={isReadOnly}
                 onChange={(e) => setModelForm((prev) => ({ ...prev, name: e.target.value }))}
                 placeholder="e.g. My Custom Model"
                 className="h-8 text-sm"
@@ -356,11 +334,7 @@ export function ImageSettings({ selectedProviderId }: ImageSettingsProps) {
               <Button variant="outline" size="sm" onClick={() => setShowModelDialog(false)}>
                 {t('settings.cancelEdit')}
               </Button>
-              <Button
-                size="sm"
-                onClick={handleSaveModel}
-                disabled={isReadOnly || !modelForm.id.trim()}
-              >
+              <Button size="sm" onClick={handleSaveModel} disabled={!modelForm.id.trim()}>
                 {t('settings.saveModel')}
               </Button>
             </div>

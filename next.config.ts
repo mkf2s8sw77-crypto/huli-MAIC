@@ -55,7 +55,7 @@ const nextConfig: NextConfig = {
   basePath: basePath || undefined,
   trailingSlash,
   output: process.env.VERCEL ? undefined : 'standalone',
-  transpilePackages: ['mathml2omml', 'pptxgenjs'],
+  transpilePackages: ['mathml2omml', 'pptxgenjs', '@maic/importer'],
   serverExternalPackages: ['better-sqlite3'],
   experimental: {
     proxyClientMaxBodySize: '200mb',

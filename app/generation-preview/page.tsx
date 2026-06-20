@@ -12,8 +12,10 @@ import { cn } from '@/lib/utils';
 import { useStageStore } from '@/lib/store/stage';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useAgentRegistry } from '@/lib/orchestration/registry/store';
-import { getAvailableProvidersWithVoices } from '@/lib/audio/voice-resolver';
-import { getVoxCPMProviderOptions, useVoxCPMVoiceProfiles } from '@/lib/audio/voxcpm-voices';
+import { getEnabledProvidersWithVoices } from '@/lib/audio/voice-resolver';
+import { isTTSProviderEnabled } from '@/lib/audio/provider-enablement';
+import { useVoxCPMVoiceProfiles } from '@/lib/audio/voxcpm-voices';
+import { resolveAgentVoiceOptions, pickNarratorAgent } from '@/lib/audio/agent-voice';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import {
   loadImageMapping,
@@ -42,6 +44,7 @@ import {
   getViewportRatio,
   type ViewportPreset,
 } from '@/lib/config/viewport';
+import { resolveTaskEngineModeFromOutlineDoneEvent } from './vocational-mode';
 
 const log = createLogger('GenerationPreview');
 const OUTLINE_REVIEW_AUTO_CONTINUE_MS = 2500;
@@ -181,6 +184,7 @@ function GenerationPreviewContent() {
         if (parsed.previewPhase === 'review' && !parsed.sceneOutlines?.length) {
           outlineReviewIntentRef.current = true;
         }
+        parsed.taskEngineMode = parsed.taskEngineMode === true;
         setSession(parsed);
       } catch (e) {
         log.error('Failed to parse generation session:', e);
@@ -493,11 +497,14 @@ function GenerationPreviewContent() {
         ),
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        interactiveMode: !!currentSession.requirements.interactiveMode,
+        taskEngineMode: currentSession.taskEngineMode === true,
       };
 
       // ── Generate outlines first (infers languageDirective) ──
       let outlines = currentSession.sceneOutlines;
       let languageDirective = currentSession.languageDirective;
+      let courseTitle = currentSession.courseTitle;
 
       const outlineStepIdx = activeSteps.findIndex((s) => s.id === 'outline');
       setCurrentStepIndex(outlineStepIdx >= 0 ? outlineStepIdx : 0);
@@ -509,9 +516,12 @@ function GenerationPreviewContent() {
         const outlineResult = await new Promise<{
           outlines: SceneOutline[];
           languageDirective: string;
+          courseTitle?: string;
+          taskEngineMode: boolean;
         }>((resolve, reject) => {
           const collected: SceneOutline[] = [];
           let directive: string | undefined;
+          let title: string | undefined;
 
           fetch(withBasePath('/api/generate/scene-outlines-stream'), {
             method: 'POST',
@@ -554,11 +564,19 @@ function GenerationPreviewContent() {
                         const evt = JSON.parse(line.slice(6));
                         if (evt.type === 'languageDirective') {
                           directive = evt.data;
+                        } else if (evt.type === 'courseTitle') {
+                          title = evt.data;
                         } else if (evt.type === 'outline') {
                           collected.push(evt.data);
                           setStreamingOutlines([...collected]);
                         } else if (evt.type === 'retry') {
                           collected.length = 0;
+                          // Drop any directive/title latched from the failed
+                          // attempt — the server resets these per attempt, so a
+                          // succeeding attempt that omits them must fall back, not
+                          // inherit the previous attempt's stale values.
+                          directive = undefined;
+                          title = undefined;
                           setStreamingOutlines([]);
                           setStatusMessage(t('generation.outlineRetrying'));
                         } else if (evt.type === 'done') {
@@ -568,6 +586,8 @@ function GenerationPreviewContent() {
                             languageDirective:
                               directive ||
                               'Teach in the language that matches the user requirement.',
+                            courseTitle: evt.courseTitle || title,
+                            taskEngineMode: resolveTaskEngineModeFromOutlineDoneEvent(evt),
                           });
                           return;
                         } else if (evt.type === 'error') {
@@ -585,6 +605,12 @@ function GenerationPreviewContent() {
                         outlines: collected,
                         languageDirective:
                           directive || 'Teach in the language that matches the user requirement.',
+                        // Carry any title latched from a streaming `courseTitle`
+                        // event here too — symmetric with languageDirective — so
+                        // a stream that ends without an explicit `done` event
+                        // does not silently drop a valid inferred title.
+                        courseTitle: title,
+                        taskEngineMode: false,
                       });
                     } else {
                       reject(new Error(t('generation.outlineEmptyResponse')));
@@ -601,6 +627,8 @@ function GenerationPreviewContent() {
 
         outlines = outlineResult.outlines;
         languageDirective = outlineResult.languageDirective;
+        courseTitle = outlineResult.courseTitle;
+        const effectiveTaskEngineMode = outlineResult.taskEngineMode;
         setIsOutlineStreaming(false);
 
         // Mid-stream review intent (sticky ref) overrides the auto-continue timer.
@@ -611,6 +639,8 @@ function GenerationPreviewContent() {
           ...currentSession,
           sceneOutlines: outlines,
           languageDirective,
+          courseTitle,
+          taskEngineMode: effectiveTaskEngineMode,
           previewPhase: shouldReviewOutlines ? 'review' : 'outline-ready',
         };
         persistSession(updatedSession);
@@ -624,6 +654,7 @@ function GenerationPreviewContent() {
         currentSession = {
           ...currentSession,
           sceneOutlines: outlines,
+          taskEngineMode: effectiveTaskEngineMode,
           previewPhase: 'generating-content',
         };
         persistSession(currentSession);
@@ -644,10 +675,17 @@ function GenerationPreviewContent() {
       if (!outlines || outlines.length === 0) {
         throw new Error(t('generation.outlineEmptyResponse'));
       }
+      stage.taskEngineMode = currentSession.taskEngineMode === true;
 
       // Store languageDirective on the stage
       if (languageDirective) {
         stage.languageDirective = languageDirective;
+      }
+
+      // Adopt the LLM-inferred course title as the stage name when available,
+      // replacing the raw-requirement placeholder set at stage creation time.
+      if (courseTitle) {
+        stage.name = courseTitle;
       }
 
       // ── Agent generation (after outlines — uses languageDirective + outlines) ──
@@ -676,7 +714,7 @@ function GenerationPreviewContent() {
           }));
 
           const getAvailableVoicesForGeneration = () => {
-            const providers = getAvailableProvidersWithVoices(
+            const providers = getEnabledProvidersWithVoices(
               settings.ttsProvidersConfig,
               voxcpmProfiles,
             );
@@ -714,10 +752,14 @@ function GenerationPreviewContent() {
           const agentData = await agentResp.json();
           if (!agentData.success) throw new Error(agentData.error || 'Agent generation failed');
 
-          // Save to IndexedDB and registry
+          // Save to IndexedDB and registry. The agent-profile LLM has already
+          // bound each agent's voice (from availableVoices); the fallback for an
+          // invalid/unavailable voice is applied later at the live TTS call.
           const { saveGeneratedAgents } = await import('@/lib/orchestration/registry/store');
           const savedIds = await saveGeneratedAgents(stage.id, agentData.agents);
           settings.setSelectedAgentIds(savedIds);
+          // Stage-derived, not a user choice — must not carry across classrooms.
+          settings.setAgentSelectionIsUserSet(false);
           stage.agentIds = savedIds;
 
           // Show card-reveal modal, continue generation once all cards are revealed
@@ -817,16 +859,19 @@ function GenerationPreviewContent() {
       const contentResp = await fetch(withBasePath('/api/generate/scene-content'), {
         method: 'POST',
         headers: getApiHeaders(),
-        body: JSON.stringify({
-          outline: firstOutline,
-          allOutlines: outlines,
-          pdfImages: currentSession.pdfImages,
-          imageMapping,
-          stageInfo,
-          stageId: stage.id,
-          agents,
-          languageDirective,
-        }),
+        body: JSON.stringify(
+          withThinkingConfig({
+            outline: firstOutline,
+            allOutlines: outlines,
+            pdfImages: currentSession.pdfImages,
+            imageMapping,
+            stageInfo,
+            stageId: stage.id,
+            agents,
+            languageDirective,
+            requirements: currentSession.requirements,
+          }),
+        ),
         signal,
       });
 
@@ -874,18 +919,23 @@ function GenerationPreviewContent() {
       }
 
       // Generate TTS for first scene (part of actions step — blocking)
-      if (settings.ttsEnabled && settings.ttsProviderId !== 'browser-native-tts') {
+      if (
+        settings.ttsEnabled &&
+        settings.ttsProviderId !== 'browser-native-tts' &&
+        isTTSProviderEnabled(
+          settings.ttsProviderId,
+          settings.ttsProvidersConfig?.[settings.ttsProviderId],
+        )
+      ) {
         const ttsProviderConfig = settings.ttsProvidersConfig?.[settings.ttsProviderId];
-        const providerOptions =
-          settings.ttsProviderId === 'voxcpm-tts'
-            ? {
-                ...(ttsProviderConfig?.providerOptions || {}),
-                ...(await getVoxCPMProviderOptions(settings.ttsVoice, {
-                  role: 'teacher',
-                  language: languageDirective,
-                })),
-              }
-            : undefined;
+        // Narration uses the teacher agent's voice (single resolver → stable timbre).
+        const teacherAgent = pickNarratorAgent(useAgentRegistry.getState().listAgents());
+        const providerOptions = await resolveAgentVoiceOptions(teacherAgent, {
+          providerId: settings.ttsProviderId,
+          providerConfig: ttsProviderConfig,
+          voiceId: settings.ttsVoice,
+          language: languageDirective,
+        });
         const speechActions = (data.scene.actions || []).filter(
           (a: { type: string; text?: string }) => a.type === 'speech' && a.text,
         );
@@ -908,8 +958,9 @@ function GenerationPreviewContent() {
                 ttsVoice: settings.ttsVoice,
                 ttsSpeed: settings.ttsSpeed,
                 ttsApiKey: ttsProviderConfig?.apiKey || undefined,
+                // Managed providers resolve their base URL server-side; only
+                // send the client's own base URL (custom providers).
                 ttsBaseUrl:
-                  ttsProviderConfig?.serverBaseUrl ||
                   ttsProviderConfig?.baseUrl ||
                   ttsProviderConfig?.customDefaultBaseUrl ||
                   undefined,

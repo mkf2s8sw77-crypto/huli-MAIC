@@ -25,7 +25,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
-import { LanguageSwitcher } from '@/components/language-switcher';
 import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { InputGroup, InputGroupInput, InputGroupButton } from '@/components/ui/input-group';
@@ -67,7 +66,6 @@ import {
   type ViewportPreset,
   getAspectRatioCssValueByRatio,
 } from '@/lib/config/viewport';
-import { resolveRequirementLanguage } from '@/lib/generation/language-policy';
 import { useImportClassroom } from '@/lib/import/use-import-classroom';
 import { shouldShowVocationalTestUi } from '@/lib/config/feature-flags';
 import { useImportPptx } from '@/lib/import/use-import-pptx';
@@ -75,7 +73,6 @@ import { useImportPptx } from '@/lib/import/use-import-pptx';
 const log = createLogger('Home');
 
 const WEB_SEARCH_STORAGE_KEY = 'webSearchEnabled';
-const LANGUAGE_STORAGE_KEY = 'generationLanguage';
 const VIEWPORT_PRESET_STORAGE_KEY = 'generationViewportPreset';
 const RECENT_OPEN_STORAGE_KEY = 'recentClassroomsOpen';
 const INTERACTIVE_MODE_STORAGE_KEY = 'interactiveModeEnabled';
@@ -89,7 +86,6 @@ const PPTX_IMPORT_ENABLED = process.env.NEXT_PUBLIC_ENABLE_PPTX_IMPORT === 'true
 interface FormState {
   pdfFile: File | null;
   requirement: string;
-  language: 'zh-CN' | 'en-US';
   viewportPreset: ViewportPreset;
   webSearch: boolean;
   interactiveMode: boolean;
@@ -99,7 +95,6 @@ interface FormState {
 const initialFormState: FormState = {
   pdfFile: null,
   requirement: '',
-  language: 'zh-CN',
   viewportPreset: DEFAULT_VIEWPORT_PRESET,
   webSearch: false,
   interactiveMode: false,
@@ -147,17 +142,10 @@ function HomePage() {
     }
     try {
       const savedWebSearch = localStorage.getItem(WEB_SEARCH_STORAGE_KEY);
-      const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
       const savedViewportPreset = localStorage.getItem(VIEWPORT_PRESET_STORAGE_KEY);
       const savedInteractiveMode = localStorage.getItem(INTERACTIVE_MODE_STORAGE_KEY);
       const updates: Partial<FormState> = {};
       if (savedWebSearch === 'true') updates.webSearch = true;
-      if (savedLanguage === 'zh-CN' || savedLanguage === 'en-US') {
-        updates.language = savedLanguage;
-      } else {
-        const detected = navigator.language?.startsWith('zh') ? 'zh-CN' : 'en-US';
-        updates.language = detected;
-      }
       if (
         savedViewportPreset &&
         VIEWPORT_OPTIONS.some((option) => option.id === savedViewportPreset)
@@ -305,7 +293,6 @@ function HomePage() {
     setForm((prev) => ({ ...prev, [field]: value }));
     try {
       if (field === 'webSearch') localStorage.setItem(WEB_SEARCH_STORAGE_KEY, String(value));
-      if (field === 'language') localStorage.setItem(LANGUAGE_STORAGE_KEY, String(value));
       if (field === 'viewportPreset') {
         localStorage.setItem(VIEWPORT_PRESET_STORAGE_KEY, String(value));
       }
@@ -331,13 +318,9 @@ function HomePage() {
 
     try {
       const userProfile = useUserProfileStore.getState();
-      const resolvedLanguage = resolveRequirementLanguage(form.requirement, form.language).language;
-      if (resolvedLanguage !== form.language) {
-        updateForm('language', resolvedLanguage);
-      }
       const requirements: UserRequirements = {
         requirement: form.requirement,
-        language: resolvedLanguage,
+        language: 'zh-CN',
         viewportPreset: form.viewportPreset,
         userNickname: userProfile.nickname || undefined,
         userBio: userProfile.bio || undefined,
@@ -410,7 +393,7 @@ function HomePage() {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center px-4 pt-16 pb-4 md:px-8 md:pt-16 md:pb-6 overflow-x-hidden">
+    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center px-3 pt-5 pb-4 sm:px-4 sm:pt-16 md:px-8 md:pb-6 overflow-x-hidden">
       <input
         ref={fileInputRef}
         type="file"
@@ -427,23 +410,18 @@ function HomePage() {
           className="hidden"
         />
       )}
-      {/* ═══ Top-right pill (unchanged) ═══ */}
+      {/* ═══ Top-right pill ═══ */}
       <div
         ref={toolbarRef}
-        className="fixed top-4 right-4 z-50 flex items-center gap-1 bg-white/60 dark:bg-gray-800/60 backdrop-blur-md px-2 py-1.5 rounded-full border border-gray-100/50 dark:border-gray-700/50 shadow-sm"
+        className="fixed top-3 right-3 z-50 flex items-center gap-1 bg-white/65 dark:bg-gray-800/65 backdrop-blur-md px-1.5 py-1 rounded-full border border-gray-100/50 dark:border-gray-700/50 shadow-sm sm:top-4 sm:right-4 sm:px-2 sm:py-1.5"
       >
-        {/* Language Selector */}
-        <LanguageSwitcher onOpen={() => setThemeOpen(false)} />
-
-        <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />
-
         {/* Theme Selector */}
         <div className="relative">
           <button
             onClick={() => {
               setThemeOpen(!themeOpen);
             }}
-            className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all"
+            className="p-1.5 sm:p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all"
           >
             {theme === 'light' && <Sun className="w-4 h-4" />}
             {theme === 'dark' && <Moon className="w-4 h-4" />}
@@ -509,7 +487,7 @@ function HomePage() {
             <div className="relative">
               <button
                 onClick={() => setSettingsOpen(true)}
-                className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
+                className="p-1.5 sm:p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
               >
                 <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" />
               </button>
@@ -545,7 +523,9 @@ function HomePage() {
         transition={{ duration: 0.6, ease: 'easeOut' }}
         className={cn(
           'relative z-20 w-full max-w-[800px] flex flex-col items-center',
-          classrooms.length === 0 ? 'flex-1 justify-center min-h-0' : 'mt-[10vh]',
+          classrooms.length === 0
+            ? 'flex-1 justify-start pt-10 min-h-0 sm:justify-center sm:pt-0'
+            : 'mt-[3vh] sm:mt-[10vh]',
         )}
       >
         {/* ── Logo ── */}
@@ -560,7 +540,7 @@ function HomePage() {
             stiffness: 200,
             damping: 20,
           }}
-          className="h-14 md:h-20 w-auto object-contain rounded-2xl shadow-sm ring-1 ring-black/5 dark:ring-white/10 mb-3"
+          className="h-10 sm:h-14 md:h-20 w-auto object-contain rounded-2xl shadow-sm ring-1 ring-black/5 dark:ring-white/10 mb-1.5 sm:mb-3"
         />
 
         {/* ── Slogan ── */}
@@ -568,7 +548,7 @@ function HomePage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.25 }}
-          className="text-sm md:text-base text-muted-foreground/75 mb-8 tracking-[0.08em]"
+          className="text-xs sm:text-sm md:text-base text-muted-foreground/75 mb-3 sm:mb-8 tracking-[0.08em]"
         >
           上海沪里数字科技有限公司
         </motion.p>
@@ -580,11 +560,11 @@ function HomePage() {
           transition={{ delay: 0.35 }}
           className="w-full"
         >
-          <div className="w-full rounded-2xl border border-border/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-black/[0.03] dark:shadow-black/20 transition-shadow focus-within:shadow-2xl focus-within:shadow-violet-500/[0.06]">
+          <div className="w-full rounded-[1.5rem] sm:rounded-2xl border border-border/60 bg-white/[0.82] dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-black/[0.03] dark:shadow-black/20 transition-shadow focus-within:shadow-2xl focus-within:shadow-violet-500/[0.06]">
             {/* ── Greeting + Profile + Agents ── */}
-            <div className="relative z-20 flex items-start justify-between">
+            <div className="relative z-20 flex items-center justify-between gap-2 sm:items-start">
               <GreetingBar />
-              <div className="pr-3 pt-3.5 shrink-0">
+              <div className="px-3 pt-3 sm:px-0 sm:pr-3 sm:pt-3.5 shrink-0">
                 <AgentBar />
               </div>
             </div>
@@ -593,19 +573,16 @@ function HomePage() {
             <textarea
               ref={textareaRef}
               placeholder={t('upload.requirementPlaceholder')}
-              className="w-full resize-none border-0 bg-transparent px-4 pt-1 pb-2 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none min-h-[140px] max-h-[300px]"
+              className="w-full resize-none border-0 bg-transparent px-4 pt-2 pb-3 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none min-h-[132px] max-h-[300px] sm:pt-1 sm:pb-2 sm:min-h-[140px]"
               value={form.requirement}
               onChange={(e) => updateForm('requirement', e.target.value)}
               onKeyDown={handleKeyDown}
               rows={4}
             />
 
-            {/* Toolbar row — keep a single row on mobile as well */}
-            <div className="px-3 pb-3 flex items-center gap-2">
-              <div className="flex-1 min-w-0">
+            <div className="px-3 pb-3 space-y-2 sm:flex sm:items-center sm:gap-2 sm:space-y-0">
+              <div className="min-w-0 sm:flex-1">
                 <GenerationToolbar
-                  language={form.language}
-                  onLanguageChange={(lang) => updateForm('language', lang)}
                   viewportPreset={form.viewportPreset}
                   onViewportPresetChange={(preset) => updateForm('viewportPreset', preset)}
                   webSearch={form.webSearch}
@@ -620,8 +597,8 @@ function HomePage() {
                 />
               </div>
 
-              {/* Actions row */}
-              <div className="flex items-center gap-2 justify-end shrink-0">
+              {/* Actions row — flex-wrap so send button gets its own full-width line on mobile */}
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end sm:shrink-0">
                 {/* Interactive mode toggle */}
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -630,7 +607,7 @@ function HomePage() {
                       transition={{ type: 'spring', stiffness: 400, damping: 17 }}
                       onClick={() => updateForm('interactiveMode', !form.interactiveMode)}
                       className={cn(
-                        'relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all cursor-pointer select-none whitespace-nowrap border shrink-0 h-8',
+                        'relative inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer select-none whitespace-nowrap sm:h-8 sm:flex-none sm:shrink-0',
                         form.interactiveMode
                           ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.35)] dark:shadow-[0_0_12px_rgba(6,182,212,0.25)]'
                           : 'border-cyan-300/60 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/20',
@@ -665,21 +642,20 @@ function HomePage() {
                   }}
                 />
 
-                {/* Send button */}
+                {/* Send button — full-width primary CTA on mobile */}
                 <button
                   onClick={handleGenerate}
                   disabled={!canGenerate}
                   className={cn(
-                    'shrink-0 h-9 sm:h-8 rounded-lg flex items-center justify-center gap-1 sm:gap-1.5 transition-all px-2.5 sm:px-3 min-w-[96px] sm:min-w-0',
+                    'h-11 w-full rounded-xl flex items-center justify-center gap-2 transition-all text-sm font-medium',
+                    'sm:h-8 sm:w-auto sm:rounded-lg sm:px-3 sm:text-xs sm:gap-1.5',
                     canGenerate
-                      ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm cursor-pointer'
+                      ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-md sm:shadow-sm cursor-pointer'
                       : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
                   )}
                 >
-                  <span className="text-[11px] sm:text-xs font-medium">
-                    {t('toolbar.enterClassroom')}
-                  </span>
-                  <ArrowUp className="size-3.5" />
+                  <span>{t('toolbar.enterClassroom')}</span>
+                  <ArrowUp className="size-4 sm:size-3.5" />
                 </button>
               </div>
             </div>
@@ -1072,7 +1048,10 @@ function GreetingBar() {
   };
 
   return (
-    <div ref={containerRef} className="relative pl-4 pr-2 pt-3.5 pb-1 w-auto">
+    <div
+      ref={containerRef}
+      className="relative min-w-0 flex-1 px-3 pt-3 pb-0 sm:flex-none sm:w-auto sm:pl-4 sm:pr-2 sm:pt-3.5 sm:pb-1"
+    >
       <input
         ref={avatarInputRef}
         type="file"

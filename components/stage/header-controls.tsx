@@ -19,7 +19,6 @@ import { useStageStore } from '@/lib/store';
 import { useMediaGenerationStore } from '@/lib/store/media-generation';
 import { useExportPPTX } from '@/lib/export/use-export-pptx';
 import { useExportClassroom } from '@/lib/export/use-export-classroom';
-import { LanguageSwitcher } from '../language-switcher';
 import { SettingsDialog } from '../settings';
 import {
   DropdownMenu,
@@ -44,8 +43,8 @@ interface HeaderControlsProps {
 }
 
 /**
- * Stage-level global controls: language picker, theme picker, settings
- * modal trigger, and the Pro Switch. Extracted out of `Header` so the
+ * Stage-level global controls: theme picker, settings modal trigger,
+ * exports, and the Pro Switch. Extracted out of `Header` so the
  * Pro mode CommandBar can absorb the same affordances and the playback
  * Header doesn't need to stay mounted just to host them — Pro mode
  * therefore lands on a single top-chrome bar instead of stacking the
@@ -119,11 +118,7 @@ export function HeaderControls({
             : 'bg-white/60 dark:bg-gray-800/60 border border-gray-100/50 dark:border-gray-700/50 px-2 py-1.5',
         )}
       >
-        {/* Language — Radix DropdownMenu so its menu portals to body
-            and never gets clipped by an ancestor's overflow-hidden. */}
-        <LanguageSwitcher />
-
-        {/* Theme — same Portal-backed DropdownMenu pattern. Non-modal keeps
+        {/* Theme — Portal-backed DropdownMenu pattern. Non-modal keeps
             Radix from body scroll-locking a fixed-height classroom layout. */}
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>

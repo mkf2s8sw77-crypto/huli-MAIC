@@ -46,8 +46,6 @@ const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
 
 // ─── Types ───────────────────────────────────────────────────
 export interface GenerationToolbarProps {
-  language: 'zh-CN' | 'en-US';
-  onLanguageChange: (lang: 'zh-CN' | 'en-US') => void;
   viewportPreset: ViewportPreset;
   onViewportPresetChange: (preset: ViewportPreset) => void;
   webSearch: boolean;
@@ -61,8 +59,6 @@ export interface GenerationToolbarProps {
 
 // ─── Component ───────────────────────────────────────────────
 export function GenerationToolbar({
-  language,
-  onLanguageChange,
   viewportPreset,
   onViewportPresetChange,
   webSearch,
@@ -454,35 +450,6 @@ export function GenerationToolbar({
             ))}
           </SelectContent>
         </Select>
-
-        {/* ── Language toggle ── */}
-        <div className="flex items-center rounded-full border border-border/50 overflow-hidden">
-          <button
-            onClick={() => onLanguageChange('zh-CN')}
-            className={cn(
-              'px-2 py-1 text-[11px] font-medium transition-colors',
-              language === 'zh-CN'
-                ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200'
-                : 'text-muted-foreground/70 hover:text-foreground hover:bg-muted/40',
-            )}
-          >
-            中
-          </button>
-          <button
-            onClick={() => onLanguageChange('en-US')}
-            className={cn(
-              'px-2 py-1 text-[11px] font-medium transition-colors',
-              language === 'en-US'
-                ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200'
-                : 'text-muted-foreground/70 hover:text-foreground hover:bg-muted/40',
-            )}
-          >
-            EN
-          </button>
-        </div>
-
-        {/* ── Separator ── */}
-        <div className="w-px h-4 bg-border/60 mx-1" />
 
         {/* ── Media popover ── */}
         <MediaPopover onSettingsOpen={onSettingsOpen} />
